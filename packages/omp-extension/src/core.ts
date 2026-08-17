@@ -6,7 +6,7 @@
  * tests against a mock IDE server.
  */
 
-import { isAbsolute, resolve, win32 } from "node:path";
+import { resolve, win32 } from "node:path";
 import { BridgeClient } from "./bridge-client";
 import { buildIdeContext } from "./context";
 import { pickCandidate, scanCandidates, type IdeCandidate } from "./lockfile";
@@ -218,12 +218,9 @@ export class OmpIdeBridge {
 
 	private toUri(pathOrUri: string): string {
 		if (pathOrUri.startsWith("file:")) return pathOrUri;
-		// A Windows drive path is absolute even when OMP itself runs on POSIX
-		// (cross-runtime tests, or a POSIX OMP session attached to a Windows
-		// workspace). Resolve it with Windows rules so it never gains host cwd.
-		if (win32.isAbsolute(pathOrUri) || isAbsolute(pathOrUri)) {
-			return pathToUri(pathOrUri);
-		}
+		// Windows drive/UNC paths remain Windows paths even on a POSIX OMP
+		// runtime (cross-runtime tests, or OMP attached to a remote workspace).
+		if (win32.isAbsolute(pathOrUri)) return pathToUri(pathOrUri);
 		if (win32.isAbsolute(this.cwd)) {
 			return pathToUri(win32.resolve(this.cwd, pathOrUri));
 		}
