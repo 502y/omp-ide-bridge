@@ -73,6 +73,7 @@ export function pathToUri(absolutePath: string): string {
 	if (process.platform !== "win32" && !win32.isAbsolute(absolutePath)) {
 		return `file://${pathWithForwardSlashes
 			.split("/")
+			.filter((pathSegment) => pathSegment.length > 0)
 			.map(encodeURIComponent)
 			.join("/")}`;
 	}
