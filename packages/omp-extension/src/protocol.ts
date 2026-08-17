@@ -73,7 +73,9 @@ export function pathToUri(absolutePath: string): string {
 			)
 			.join("/")}`;
 	}
-	return pathToFileURL(absolutePath.replaceAll("\\", "/")).href;
+	// Bun's POSIX pathToFileURL treats backslashes as ordinary characters;
+	// normalize separators before asking it to serialize an absolute path.
+	return pathToFileURL(absolutePath.replaceAll("\\", sep)).href;
 }
 
 export function uriToPath(uri: string): string {
