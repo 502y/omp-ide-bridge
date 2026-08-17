@@ -1,0 +1,54 @@
+<idea-plugin url="https://github.com/502y/omp-ide-bridge">
+    <id>community.omp.idebridge</id>
+    <name>OMP IDE Bridge (Community)</name>
+    <version>0.1.0</version>
+    <vendor url="https://github.com/502y">502y</vendor>
+
+    <description><![CDATA[
+        <p>Unofficial community bridge between JetBrains IDEs and Oh My Pi sessions.</p>
+        <ul>
+            <li>Shares the active file, current selection, open editors, and IDE diagnostics.</li>
+            <li>Lets connected OMP agents open files, save documents, and inspect diagnostics.</li>
+            <li>Adds an editor action that mentions the selected code in the next OMP turn.</li>
+        </ul>
+        <p>
+            Communication uses an authenticated WebSocket bound to 127.0.0.1.
+            The OMP-side extension is required.
+        </p>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <p>Initial community release.</p>
+        <ul>
+            <li>Authenticated protocol v1 bridge with lockfile discovery.</li>
+            <li>Live editor context, diagnostics, file operations, and mention actions.</li>
+            <li>Compatibility verified against IntelliJ IDEA Community 2023.1.7 and 2024.3.1.</li>
+        </ul>
+    ]]></change-notes>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <!--
+      Services (IdeBridgeServer, ProjectAdapter) are registered via @Service annotations
+      ("light services"). Light services MUST NOT also be declared in plugin.xml.
+      They are instantiated lazily; IdeBridgeStartupActivity forces IdeBridgeServer
+      to start as soon as the first project is opened.
+    -->
+
+    <extensions defaultExtensionNs="com.intellij">
+        <postStartupActivity implementation="com.omp.idebridge.IdeBridgeStartupActivity"/>
+    </extensions>
+
+    <applicationListeners>
+        <listener class="com.omp.idebridge.WorkspaceListener"
+                  topic="com.intellij.openapi.project.ProjectManagerListener"/>
+    </applicationListeners>
+
+    <actions>
+        <action id="OmpIdeBridge.Mention" class="com.omp.idebridge.MentionAction"
+                text="Mention to OMP"
+                description="Send the current editor selection to connected OMP sessions">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>

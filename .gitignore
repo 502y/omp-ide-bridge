@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# JavaScript and VS Code build output
+dist/
+*.vsix
+*.tsbuildinfo
+
+# Gradle and IntelliJ build state
+.gradle/
+build/
+.intellijPlatform/
+.kotlin/
+
+# IDE and OS metadata
+.idea/
+.vscode/
+.DS_Store
+._*
+PaxHeader/
+**/PaxHeader/
+Thumbs.db
+
+# Logs and local state
+*.log
+*.tmp
+.env
+.env.*
+!.env.example
+
+# Release artifacts
+artifacts/

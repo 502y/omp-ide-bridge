@@ -1,0 +1,66 @@
+{
+  "name": "omp-ide-bridge",
+  "displayName": "OMP IDE Bridge (Community)",
+  "description": "Unofficial community bridge between VS Code-compatible editors and the Oh My Pi coding agent",
+  "version": "0.1.0",
+  "publisher": "502y",
+  "author": "502y",
+  "license": "MIT",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/502y/omp-ide-bridge.git",
+    "directory": "packages/vscode-extension"
+  },
+  "homepage": "https://github.com/502y/omp-ide-bridge#readme",
+  "bugs": {
+    "url": "https://github.com/502y/omp-ide-bridge/issues"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "omp-ide-bridge.mentionSelection",
+        "title": "OMP: Mention Selection to Chat"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "omp-ide-bridge.mentionSelection",
+          "when": "editorHasSelection",
+          "group": "9_cutcopypaste"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "omp-ide-bridge.mentionSelection"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.config.mjs",
+    "typecheck": "tsc --noEmit",
+    "smoke": "node test/smoke.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.5.10",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  }
+}

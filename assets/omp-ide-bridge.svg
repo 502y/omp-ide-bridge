@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title description">
+  <title id="title">OMP IDE Bridge</title>
+  <desc id="description">A suspension bridge carried between two code brackets.</desc>
+  <rect x="16" y="16" width="224" height="224" rx="52" fill="#0C1628"/>
+  <rect x="18" y="18" width="220" height="220" rx="50" fill="none" stroke="#24334D" stroke-width="4"/>
+  <path d="M88 68H58V188H88" fill="none" stroke="#5EEAD4" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M168 68H198V188H168" fill="none" stroke="#5EEAD4" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M78 101Q128 178 178 101" fill="none" stroke="#FFB454" stroke-width="8" stroke-linecap="round"/>
+  <path d="M101 128V158M128 140V158M155 128V158" fill="none" stroke="#FFB454" stroke-width="6" stroke-linecap="round"/>
+  <path d="M74 160H182" fill="none" stroke="#FFB454" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="128" cy="160" r="7" fill="#F8FAFC"/>
+</svg>

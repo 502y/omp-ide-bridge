@@ -1,0 +1,27 @@
+{
+  "name": "omp-ide-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Unofficial community IDE bridge for Oh My Pi",
+  "license": "MIT",
+  "author": "502y",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/502y/omp-ide-bridge.git"
+  },
+  "homepage": "https://github.com/502y/omp-ide-bridge#readme",
+  "bugs": {
+    "url": "https://github.com/502y/omp-ide-bridge/issues"
+  },
+  "omp": {
+    "extensions": [
+      "./packages/omp-extension/index.ts"
+    ]
+  },
+  "scripts": {
+    "test:omp": "bun test --cwd packages/omp-extension",
+    "typecheck:omp": "bunx --cwd packages/omp-extension tsc --noEmit",
+    "test:vscode": "npm --prefix packages/vscode-extension run typecheck && npm --prefix packages/vscode-extension run compile && npm --prefix packages/vscode-extension run smoke"
+  }
+}

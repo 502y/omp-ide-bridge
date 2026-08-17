@@ -1,0 +1,6 @@
+src/**
+test/**
+**/*.map
+tsconfig.json
+esbuild.config.mjs
+package-lock.json
