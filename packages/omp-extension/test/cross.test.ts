@@ -17,8 +17,9 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { OmpIdeBridge } from "../src/core";
+import { pathToUri } from "../src/protocol";
 
 setDefaultTimeout(20_000);
 
@@ -26,7 +27,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const RUNNER = join(HERE, "vs-server-runner.mjs");
 const SERVER_BUNDLE = join(HERE, "..", "..", "vscode-extension", "dist", "server.js");
 const PROJ = join(tmpdir(), "omp-ide-cross-project");
-const SECOND_FILE_URI = pathToFileURL(join(PROJ, "src", "b.ts")).href;
+const SECOND_FILE_URI = pathToUri(join(PROJ, "src", "b.ts"));
 
 // Same integration exception as e2e.test.ts: real sockets, real backoff.
 function waitFor(cond: () => boolean, timeoutMs = 5000): Promise<void> {
