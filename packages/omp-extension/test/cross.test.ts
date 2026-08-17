@@ -162,7 +162,11 @@ describe("cross: omp client (Bun) × vscode server build (Node)", () => {
 			diagnostics: Array<{ message: string }>;
 		};
 		const diagnosticMessages = diag.diagnostics.map((diagnostic) => diagnostic.message);
-		expect(diagnosticMessages, JSON.stringify(diag)).toContain("unused constant");
+		const requestedTarget = pathToUri(join(PROJ, "src", "a.ts"));
+		expect({ diagnosticMessages, requestedTarget }, JSON.stringify(diag)).toEqual({
+			diagnosticMessages: expect.arrayContaining(["unused constant"]),
+			requestedTarget: SECOND_FILE_URI.replace("b.ts", "a.ts"),
+		});
 		const diff = (await fx.bridge.openDiff("src/a.ts", "replacement")) as {
 			status: string;
 			finalText: string;
