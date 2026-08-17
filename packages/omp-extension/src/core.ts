@@ -224,9 +224,7 @@ export class OmpIdeBridge {
 		const workspacePath = remoteWindowsWorkspace
 			? win32.resolve(this.cwd, pathOrUri)
 			: resolve(this.cwd, pathOrUri);
-		return pathToUri(
-			remoteWindowsWorkspace ? workspacePath : workspacePath.replaceAll("\\", "/"),
-		);
+		return pathToUri(workspacePath.replaceAll("\\", "/"));
 	}
 
 	private clearTimers(): void {
