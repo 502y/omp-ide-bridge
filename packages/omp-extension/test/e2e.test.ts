@@ -402,6 +402,23 @@ describe("path helpers", () => {
 		);
 	});
 
+	test("resolves relative paths against a Windows cwd without host contamination", async () => {
+		if (process.platform === "win32") return;
+		const dir = mkdtempSync(join(tmpdir(), "omp-ide-uri-"));
+		const bridge = new OmpIdeBridge(
+			{ onStatus: () => {}, onAtMentioned: () => {}, onSelectionStatus: () => {} },
+			dir,
+		);
+		bridge.start(String.raw`Z:\Codes\remote-workspace`);
+		try {
+			// @ts-expect-error private contract exercised to cover cross-runtime cwd
+			expect(bridge.toUri("src/a.ts")).toBe("file:///Z:/Codes/remote-workspace/src/a.ts");
+		} finally {
+			bridge.stop();
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
 	test("round-trips Windows UNC paths", () => {
 		if (process.platform !== "win32") return;
 		const uncPath = String.raw`\\server\share\repo\a b.ts`;

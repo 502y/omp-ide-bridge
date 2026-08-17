@@ -218,12 +218,13 @@ export class OmpIdeBridge {
 
 	private toUri(pathOrUri: string): string {
 		if (pathOrUri.startsWith("file:")) return pathOrUri;
-		if (isAbsolute(pathOrUri) || win32.isAbsolute(pathOrUri)) {
+		// A Windows drive path is absolute even when OMP itself runs on POSIX
+		// (cross-runtime tests, or a POSIX OMP session attached to a Windows
+		// workspace). Resolve it with Windows rules so it never gains host cwd.
+		if (win32.isAbsolute(pathOrUri) || isAbsolute(pathOrUri)) {
 			return pathToUri(pathOrUri);
 		}
-		// Windows-style cwd on a POSIX host is possible in cross-runtime tests:
-		// keep the drive letter instead of letting POSIX `resolve` prepend host cwd.
-		if (process.platform !== "win32" && win32.isAbsolute(this.cwd)) {
+		if (win32.isAbsolute(this.cwd)) {
 			return pathToUri(win32.resolve(this.cwd, pathOrUri));
 		}
 		return pathToUri(resolve(this.cwd, pathOrUri));
