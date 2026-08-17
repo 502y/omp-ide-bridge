@@ -161,6 +161,11 @@ describe("cross: omp client (Bun) × vscode server build (Node)", () => {
 		const diag = (await fx.bridge.getDiagnostics("src/a.ts")) as {
 			diagnostics: Array<{ message: string }>;
 		};
+		console.log("diagnostic assertion state", {
+			expected: SECOND_FILE_URI.replace("b.ts", "a.ts"),
+			got: pathToUri(join(PROJ, "src", "a.ts")),
+			response: diag,
+		});
 		const diagnosticMessages = diag.diagnostics.map((diagnostic) => diagnostic.message);
 		const requestedUri = pathToUri(join(PROJ, "src", "a.ts"));
 		expect(
