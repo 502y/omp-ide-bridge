@@ -389,6 +389,13 @@ describe("path helpers", () => {
 		expect(pathToUri(windowsPath)).toBe("file:///Z:/Codes/repo/a%20b.ts");
 	});
 
+	test("decodes empty-authority POSIX file URIs without adding a slash", () => {
+		if (process.platform === "win32") return;
+		expect(uriToPath("file:///tmp/omp-ide-test-project/src/a.ts")).toBe(
+			"/tmp/omp-ide-test-project/src/a.ts",
+		);
+	});
+
 	test("round-trips Windows UNC paths", () => {
 		if (process.platform !== "win32") return;
 		const uncPath = String.raw`\\server\share\repo\a b.ts`;

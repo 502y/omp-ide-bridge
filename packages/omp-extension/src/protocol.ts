@@ -77,7 +77,13 @@ export function pathToUri(absolutePath: string): string {
 }
 
 export function uriToPath(uri: string): string {
-	return uri.startsWith("file:") ? fileURLToPath(uri) : uri;
+	if (!uri.startsWith("file:")) return uri;
+	const decodedPath = fileURLToPath(uri);
+	// Bun's POSIX fileURLToPath returns `//...` for RFC 3986 URIs with an empty
+	// authority (file:///tmp/a). Collapse the implementation artifact back to
+	// one slash; a real UNC URI (file://server/share) has a non-empty authority
+	// and never reaches this branch.
+	return decodedPath.startsWith("//") ? decodedPath.slice(1) : decodedPath;
 }
 
 /** True when `child` is `parent` itself or lives under it (segment boundary). */
