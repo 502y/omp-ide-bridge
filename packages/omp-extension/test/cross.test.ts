@@ -110,13 +110,17 @@ describe("cross: omp client (Bun) × vscode server build (Node)", () => {
 
 	afterEach(async () => {
 		fx.bridge.stop();
-		// The graceful shutdown test may already have asked the server to stop;
-		// avoid a second control write racing its process exit.
+		// The graceful shutdown test may already have asked the server to stop.
+		// Its process can exit before exitCode is observable; tolerate that race.
 		if (fx.child.exitCode === null) {
 			send(fx.child, { stop: true });
 		}
 		await waitFor(() => fx.child.exitCode !== null, 8000).catch(() => {
-			fx.child.kill("SIGKILL");
+			try {
+				fx.child.kill("SIGKILL");
+			} catch {
+				// Already exited.
+			}
 		});
 		rmSync(fx.dir, { recursive: true, force: true });
 	});
@@ -157,7 +161,6 @@ describe("cross: omp client (Bun) × vscode server build (Node)", () => {
 		const diag = (await fx.bridge.getDiagnostics("src/a.ts")) as {
 			diagnostics: Array<{ message: string }>;
 		};
-		console.log("cross diagnostics request target", fx.bridge.ideName, JSON.stringify(diag));
 		const diagnosticMessages = diag.diagnostics.map((diagnostic) => diagnostic.message);
 		expect(diagnosticMessages, JSON.stringify(diag)).toContain("unused constant");
 		const diff = (await fx.bridge.openDiff("src/a.ts", "replacement")) as {

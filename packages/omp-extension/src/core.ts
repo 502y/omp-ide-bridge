@@ -183,7 +183,6 @@ export class OmpIdeBridge {
 		const res = await this.requireClient().call("getDiagnostics", {
 			...(requestedUri !== undefined ? { uri: requestedUri } : {}),
 		});
-		console.log("diagnostics request", requestedUri, JSON.stringify(res));
 		return {
 			// Wire-native LSP shape, 0-based (see getEditorContext).
 			diagnostics: readField(res, "diagnostics", diagnosticList).map((d) => ({

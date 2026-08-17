@@ -73,7 +73,7 @@ export function pathToUri(absolutePath: string): string {
 			)
 			.join("/")}`;
 	}
-	return pathToFileURL(absolutePath).href;
+	return pathToFileURL(absolutePath.replaceAll("\\", "/")).href;
 }
 
 export function uriToPath(uri: string): string {
