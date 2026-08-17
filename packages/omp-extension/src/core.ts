@@ -6,7 +6,7 @@
  * tests against a mock IDE server.
  */
 
-import { resolve, win32 } from "node:path";
+import { isAbsolute, resolve, win32 } from "node:path";
 import { BridgeClient } from "./bridge-client";
 import { buildIdeContext } from "./context";
 import { pickCandidate, scanCandidates, type IdeCandidate } from "./lockfile";
@@ -218,13 +218,17 @@ export class OmpIdeBridge {
 
 	private toUri(pathOrUri: string): string {
 		if (pathOrUri.startsWith("file:")) return pathOrUri;
-		// Windows drive/UNC paths remain Windows paths even on a POSIX OMP
-		// runtime (cross-runtime tests, or OMP attached to a remote workspace).
-		if (win32.isAbsolute(pathOrUri)) return pathToUri(pathOrUri);
-		if (win32.isAbsolute(this.cwd)) {
-			return pathToUri(win32.resolve(this.cwd, pathOrUri));
+		// A Windows drive/UNC workspace stays Windows-shaped even on POSIX runtimes
+		// (cross-runtime tests, or POSIX OMP attached to a remote Windows workspace).
+		const remoteWindowsWorkspace = win32.isAbsolute(this.cwd);
+		if (remoteWindowsWorkspace ? win32.isAbsolute(pathOrUri) : isAbsolute(pathOrUri)) {
+			return pathToUri(pathOrUri);
 		}
-		return pathToUri(resolve(this.cwd, pathOrUri));
+		return pathToUri(
+			remoteWindowsWorkspace
+				? win32.resolve(this.cwd, pathOrUri)
+				: resolve(this.cwd, pathOrUri),
+		);
 	}
 
 	private clearTimers(): void {
