@@ -70,13 +70,14 @@ export function pathToUri(absolutePath: string): string {
 			.map(encodeURIComponent)
 			.join("/")}`;
 	}
+	const encodedPath = pathWithForwardSlashes
+		.split("/")
+		.map(encodeURIComponent)
+		.join("/");
 	// Bun's POSIX pathToFileURL mishandles a leading `/`; construct the
 	// RFC 3986 empty-authority URI explicitly so `/tmp/a.ts` -> file:///tmp/a.ts.
 	if (process.platform !== "win32" && !win32.isAbsolute(absolutePath)) {
-		return `file://${pathWithForwardSlashes
-			.split("/")
-			.map(encodeURIComponent)
-			.join("/")}`;
+		return `file://${encodedPath.replace(/^\/+/, "")}`;
 	}
 	return `file:///${pathWithForwardSlashes
 		.split("/")
