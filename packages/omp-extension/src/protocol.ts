@@ -72,6 +72,7 @@ export function pathToUri(absolutePath: string): string {
 	}
 	const encodedPath = pathWithForwardSlashes
 		.split("/")
+		.filter((pathSegment) => pathSegment.length > 0)
 		.map((pathSegment, index) =>
 			index === 0
 				? encodeURIComponent(pathSegment).replace("%3A", ":").replaceAll("~", "%7E")
@@ -79,7 +80,7 @@ export function pathToUri(absolutePath: string): string {
 		)
 		.join("/");
 	if (process.platform !== "win32" && !win32.isAbsolute(absolutePath)) {
-		return `file://${encodedPath.replace(/^\/+/, "/")}`;
+		return `file:///${encodedPath}`;
 	}
 	return `file:///${encodedPath}`;
 }
