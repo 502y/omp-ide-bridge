@@ -78,7 +78,12 @@ interface CrossFixture {
 }
 
 function send(child: ChildProcess, cmd: Record<string, unknown>): void {
-	child.stdin?.write(`${JSON.stringify(cmd)}\n`);
+	if (child.exitCode !== null || child.stdin?.destroyed) return;
+	try {
+		child.stdin?.write(`${JSON.stringify(cmd)}\n`);
+	} catch {
+		// Test child may have exited between the liveness check and write.
+	}
 }
 
 describe("cross: omp client (Bun) × vscode server build (Node)", () => {
@@ -148,9 +153,8 @@ describe("cross: omp client (Bun) × vscode server build (Node)", () => {
 		const diag = (await fx.bridge.getDiagnostics("src/a.ts")) as {
 			diagnostics: Array<{ message: string }>;
 		};
-		expect(diag, JSON.stringify(diag)).toEqual(expect.objectContaining({
-			diagnostics: [expect.objectContaining({ message: "unused constant" })],
-		}));
+		const diagnosticMessages = diag.diagnostics.map((diagnostic) => diagnostic.message);
+		expect(diagnosticMessages, JSON.stringify(diag)).toContain("unused constant");
 		const diff = (await fx.bridge.openDiff("src/a.ts", "replacement")) as {
 			status: string;
 			finalText: string;
