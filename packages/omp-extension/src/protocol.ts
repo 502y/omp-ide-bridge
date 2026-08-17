@@ -83,7 +83,14 @@ export function uriToPath(uri: string): string {
 	// authority (file:///tmp/a). Collapse the implementation artifact back to
 	// one slash; a real UNC URI (file://server/share) has a non-empty authority
 	// and never reaches this branch.
-	return decodedPath.startsWith("//") ? decodedPath.slice(1) : decodedPath;
+	if (decodedPath.startsWith("//")) return decodedPath.slice(1);
+	// Bun's POSIX fileURLToPath also treats `file:///Z:/...` as POSIX and
+	// leaves `/Z:/...`. Windows drive URIs produced by an IDE must decode to
+	// a native Windows path even when the OMP runtime is POSIX.
+	if (process.platform !== "win32" && /^\/[A-Za-z]:\//.test(decodedPath)) {
+		return decodedPath.slice(1);
+	}
+	return decodedPath;
 }
 
 /** True when `child` is `parent` itself or lives under it (segment boundary). */

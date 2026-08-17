@@ -396,6 +396,12 @@ describe("path helpers", () => {
 		);
 	});
 
+	test("decodes Windows drive file URIs on every host platform", () => {
+		expect(uriToPath("file:///Z:/Codes/repo/a%20b.ts").replaceAll("\\", "/")).toBe(
+			"Z:/Codes/repo/a b.ts",
+		);
+	});
+
 	test("round-trips Windows UNC paths", () => {
 		if (process.platform !== "win32") return;
 		const uncPath = String.raw`\\server\share\repo\a b.ts`;
@@ -446,7 +452,7 @@ describe("buildIdeContext", () => {
 		expect(formatSelectionStatus(sel(6, 6), PROJ)).toBe("\u{F15B} src/a.ts:7");
 		const outsideStatus = formatSelectionStatus(sel(0, 0), ELSEWHERE);
 		expect(outsideStatus).toStartWith("\u{F15B} ");
-		expect(outsideStatus).toContain("…");
+		expect(outsideStatus).toMatch(/(:\/|^\/)/);
 		expect(outsideStatus).toEndWith("/src/a.ts:1");
 	});
 
