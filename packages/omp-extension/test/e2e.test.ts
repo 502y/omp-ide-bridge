@@ -452,8 +452,8 @@ describe("buildIdeContext", () => {
 		expect(formatSelectionStatus(sel(6, 6), PROJ)).toBe("\u{F15B} src/a.ts:7");
 		const outsideStatus = formatSelectionStatus(sel(0, 0), ELSEWHERE);
 		expect(outsideStatus).toStartWith("\u{F15B} ");
-		expect(outsideStatus).toMatch(/(:\/|^\/)/);
-		expect(outsideStatus).toEndWith("/src/a.ts:1");
+		expect(outsideStatus).toEndWith("st-project/src/a.ts:1");
+		expect(outsideStatus.length).toBeLessThanOrEqual(50);
 	});
 
 	test("formatSelectionStatus: long paths middle-truncate, line suffix survives", () => {

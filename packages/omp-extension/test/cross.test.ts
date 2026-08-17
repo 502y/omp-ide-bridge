@@ -147,7 +147,9 @@ describe("cross: omp client (Bun) × vscode server build (Node)", () => {
 		const diag = (await fx.bridge.getDiagnostics("src/a.ts")) as {
 			diagnostics: Array<{ message: string }>;
 		};
-		expect(diag.diagnostics[0]?.message).toBe("unused constant");
+		expect(diag, JSON.stringify(diag)).toEqual(expect.objectContaining({
+			diagnostics: [expect.objectContaining({ message: "unused constant" })],
+		}));
 		const diff = (await fx.bridge.openDiff("src/a.ts", "replacement")) as {
 			status: string;
 			finalText: string;
