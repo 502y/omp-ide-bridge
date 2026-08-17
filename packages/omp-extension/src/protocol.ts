@@ -79,7 +79,7 @@ export function pathToUri(absolutePath: string): string {
 		)
 		.join("/");
 	if (process.platform !== "win32" && !win32.isAbsolute(absolutePath)) {
-		return `file://${encodedPath}`;
+		return `file://${encodedPath.replace(/^\/+/, "/")}`;
 	}
 	return `file:///${encodedPath}`;
 }
