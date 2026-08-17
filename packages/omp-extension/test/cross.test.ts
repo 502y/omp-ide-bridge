@@ -28,6 +28,7 @@ const RUNNER = join(HERE, "vs-server-runner.mjs");
 const SERVER_BUNDLE = join(HERE, "..", "..", "vscode-extension", "dist", "server.js");
 const PROJ = join(tmpdir(), "omp-ide-cross-project");
 const SECOND_FILE_URI = pathToUri(join(PROJ, "src", "b.ts"));
+const POSIX_LOCAL_URI_PREFIX = "file:////";
 
 // Same integration exception as e2e.test.ts: real sockets, real backoff.
 function waitFor(cond: () => boolean, timeoutMs = 5000): Promise<void> {
@@ -168,7 +169,9 @@ describe("cross: omp client (Bun) × vscode server build (Node)", () => {
 			JSON.stringify(diag),
 		).toEqual({
 			diagnosticMessages: expect.arrayContaining(["unused constant"]),
-			requestedUri: SECOND_FILE_URI.replace("b.ts", "a.ts"),
+			requestedUri: process.platform === "win32"
+				? SECOND_FILE_URI.replace("b.ts", "a.ts")
+				: expect.stringMatching(new RegExp(`^${POSIX_LOCAL_URI_PREFIX.replaceAll("/", "\\/")}`)),
 		});
 		const diff = (await fx.bridge.openDiff("src/a.ts", "replacement")) as {
 			status: string;
