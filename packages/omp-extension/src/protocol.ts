@@ -4,7 +4,7 @@
  */
 
 import { isAbsolute, relative, resolve, sep, win32 } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 export interface Position {
 	line: number;
@@ -62,20 +62,30 @@ export const RPC_INVALID_PARAMS = -32602;
 export const PROTOCOL_VERSION = 1;
 
 export function pathToUri(absolutePath: string): string {
-	if (process.platform !== "win32" && win32.isAbsolute(absolutePath)) {
-		const windowsPathWithForwardSlashes = absolutePath.replaceAll("\\", "/");
-		return `file:///${windowsPathWithForwardSlashes
+	const pathWithForwardSlashes = absolutePath.replaceAll("\\", "/");
+	// UNC keeps its authority: \\server\share\a.ts -> file://server/share/a.ts.
+	if (pathWithForwardSlashes.startsWith("//")) {
+		return `file:${pathWithForwardSlashes
 			.split("/")
-			.map((pathSegment, index) =>
-				index === 0
-					? encodeURIComponent(pathSegment).replace("%3A", ":")
-					: encodeURIComponent(pathSegment),
-			)
+			.map(encodeURIComponent)
 			.join("/")}`;
 	}
-	// Bun's POSIX pathToFileURL treats backslashes as ordinary characters;
-	// normalize separators before asking it to serialize an absolute path.
-	return pathToFileURL(absolutePath.replaceAll("\\", sep)).href;
+	// Bun's POSIX pathToFileURL mishandles a leading `/`; construct the
+	// RFC 3986 empty-authority URI explicitly so `/tmp/a.ts` -> file:///tmp/a.ts.
+	if (process.platform !== "win32" && !win32.isAbsolute(absolutePath)) {
+		return `file://${pathWithForwardSlashes
+			.split("/")
+			.map(encodeURIComponent)
+			.join("/")}`;
+	}
+	return `file:///${pathWithForwardSlashes
+		.split("/")
+		.map((pathSegment, index) =>
+			index === 0
+				? encodeURIComponent(pathSegment).replace("%3A", ":").replaceAll("~", "%7E")
+				: encodeURIComponent(pathSegment).replaceAll("~", "%7E"),
+		)
+		.join("/")}`;
 }
 
 export function uriToPath(uri: string): string {

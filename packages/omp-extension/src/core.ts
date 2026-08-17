@@ -6,7 +6,7 @@
  * tests against a mock IDE server.
  */
 
-import { resolve, win32 } from "node:path";
+import { isAbsolute, resolve, win32 } from "node:path";
 import { BridgeClient } from "./bridge-client";
 import { buildIdeContext } from "./context";
 import { pickCandidate, scanCandidates, type IdeCandidate } from "./lockfile";
@@ -175,7 +175,7 @@ export class OmpIdeBridge {
 		});
 	}
 
-	async getDiagnostics(path?: string): Promise<unknown> {
+async getDiagnostics(path?: string): Promise<unknown> {
 		if (!(this.client?.ide?.capabilities.diagnostics ?? false)) {
 			throw new Error("Connected IDE does not support diagnostics");
 		}
@@ -222,10 +222,14 @@ export class OmpIdeBridge {
 		// A Windows drive/UNC workspace stays Windows-shaped even on POSIX runtimes
 		// (cross-runtime tests, or POSIX OMP attached to a remote Windows workspace).
 		const remoteWindowsWorkspace = win32.isAbsolute(this.cwd);
-		const workspacePath = remoteWindowsWorkspace
-			? win32.resolve(this.cwd, pathOrUri)
-			: resolve(this.cwd, pathOrUri);
-		return pathToUri(workspacePath.replaceAll("\\", "/"));
+		if (remoteWindowsWorkspace ? win32.isAbsolute(pathOrUri) : isAbsolute(pathOrUri)) {
+			return pathToUri(pathOrUri);
+		}
+		return pathToUri(
+			(remoteWindowsWorkspace
+				? win32.resolve(this.cwd, pathOrUri)
+				: resolve(this.cwd, pathOrUri)).replaceAll("\\", "/"),
+		);
 	}
 
 	private clearTimers(): void {
