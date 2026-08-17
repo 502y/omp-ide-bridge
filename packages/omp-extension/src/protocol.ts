@@ -70,21 +70,18 @@ export function pathToUri(absolutePath: string): string {
 			.map(encodeURIComponent)
 			.join("/")}`;
 	}
-	if (process.platform !== "win32" && !win32.isAbsolute(absolutePath)) {
-		return `file://${pathWithForwardSlashes
-			.split("/")
-			.filter((pathSegment) => pathSegment.length > 0)
-			.map(encodeURIComponent)
-			.join("/")}`;
-	}
-	return `file:///${pathWithForwardSlashes
+	const encodedPath = pathWithForwardSlashes
 		.split("/")
 		.map((pathSegment, index) =>
 			index === 0
 				? encodeURIComponent(pathSegment).replace("%3A", ":").replaceAll("~", "%7E")
 				: encodeURIComponent(pathSegment).replaceAll("~", "%7E"),
 		)
-		.join("/")}`;
+		.join("/");
+	if (process.platform !== "win32" && !win32.isAbsolute(absolutePath)) {
+		return `file://${encodedPath}`;
+	}
+	return `file:///${encodedPath}`;
 }
 
 export function uriToPath(uri: string): string {
