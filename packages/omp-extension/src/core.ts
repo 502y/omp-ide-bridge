@@ -221,6 +221,11 @@ export class OmpIdeBridge {
 		if (isAbsolute(pathOrUri) || win32.isAbsolute(pathOrUri)) {
 			return pathToUri(pathOrUri);
 		}
+		// Windows-style cwd on a POSIX host is possible in cross-runtime tests:
+		// keep the drive letter instead of letting POSIX `resolve` prepend host cwd.
+		if (process.platform !== "win32" && win32.isAbsolute(this.cwd)) {
+			return pathToUri(win32.resolve(this.cwd, pathOrUri));
+		}
 		return pathToUri(resolve(this.cwd, pathOrUri));
 	}
 
