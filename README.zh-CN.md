@@ -15,21 +15,31 @@
 
 ## 安装
 
+### 从插件市场安装 IDE 端
+
+如果希望一键安装 IDE 端插件，请先从对应市场安装：
+
+- [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=502y.omp-ide-bridge)：
+  适用于 VS Code、Cursor、Windsurf 及其他 VS Code 兼容编辑器。
+- [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/33610)：
+  适用于 IntelliJ IDEA、PyCharm、WebStorm、GoLand、Rider、CLion 及其他
+  IntelliJ Platform IDE（2023.1+）。
+
 ### OMP 端
 
-直接从本地检出的仓库安装：
-
-```sh
-omp plugin install /absolute/path/to/omp-ide-bridge
-```
-
-仓库公开发布后，同一个根目录清单也支持：
+从公开仓库安装：
 
 ```sh
 omp plugin install github:502y/omp-ide-bridge
 ```
 
-### VS Code / Cursor / Windsurf
+如需测试本地检出的版本：
+
+```sh
+omp plugin install /absolute/path/to/omp-ide-bridge
+```
+
+### 从源码安装 VS Code / Cursor / Windsurf
 
 ```sh
 cd packages/vscode-extension

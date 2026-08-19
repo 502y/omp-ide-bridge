@@ -18,21 +18,31 @@ every turn, automatically.
 
 ## Install
 
+### IDE plugin from a marketplace
+
+Install the IDE-side plugin first if you prefer one-click installation:
+
+- [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=502y.omp-ide-bridge)
+  for VS Code, Cursor, Windsurf, and other VS Code-compatible editors.
+- [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/33610)
+  for IntelliJ IDEA, PyCharm, WebStorm, GoLand, Rider, CLion, and other
+  IntelliJ Platform IDEs (2023.1+).
+
 ### OMP side
 
-Install directly from a checkout:
-
-```sh
-omp plugin install /absolute/path/to/omp-ide-bridge
-```
-
-After the repository is published, the same root manifest supports:
+Install from the public repository:
 
 ```sh
 omp plugin install github:502y/omp-ide-bridge
 ```
 
-### VS Code / Cursor / Windsurf
+To test a local checkout instead:
+
+```sh
+omp plugin install /absolute/path/to/omp-ide-bridge
+```
+
+### VS Code / Cursor / Windsurf from source
 
 ```sh
 cd packages/vscode-extension

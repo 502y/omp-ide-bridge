@@ -14,6 +14,9 @@
         <p>
             Communication uses an authenticated WebSocket bound to 127.0.0.1.
             The OMP-side extension is required.
+            <a href="https://marketplace.visualstudio.com/items?itemName=502y.omp-ide-bridge">
+                VS Code-compatible version
+            </a>
         </p>
     ]]></description>
 

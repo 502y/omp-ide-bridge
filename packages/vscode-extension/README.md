@@ -40,6 +40,7 @@ local OMP process and may then be sent to the model provider configured in OMP.
 
 Full documentation: [English](https://github.com/502y/omp-ide-bridge#readme) ·
 [简体中文](https://github.com/502y/omp-ide-bridge/blob/main/README.zh-CN.md) ·
-[Security policy](https://github.com/502y/omp-ide-bridge/blob/main/SECURITY.md)
+[Security policy](https://github.com/502y/omp-ide-bridge/blob/main/SECURITY.md) ·
+[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/33610)
 
 This project is not affiliated with or endorsed by the Oh My Pi maintainers.
