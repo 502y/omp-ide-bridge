@@ -46,32 +46,64 @@ function langOf(uri: string): string {
 	return LANG_BY_EXT[ext] ?? "";
 }
 
-/** Total width budget for the status entry; the line suffix is never truncated. */
-const STATUS_WIDTH_BUDGET = 44;
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
-/** Middle-truncate so both the directory head and the filename survive. */
-function ellipsizeMiddle(path: string, budget: number): string {
-	if (path.length <= budget || budget < 8) return path;
-	const head = Math.ceil((budget - 1) / 2);
-	const tail = budget - 1 - head;
-	return `${path.slice(0, head)}…${path.slice(path.length - tail)}`;
+/** Fit a single name without splitting a wide character or emoji sequence. */
+function fitName(name: string, budget: number): string {
+	if (budget <= 0) return "";
+	if (Bun.stringWidth(name) <= budget) return name;
+	let shown = "";
+	let width = 1; // Reserve the ellipsis.
+	for (const { segment } of graphemes.segment(name)) {
+		const nextWidth = Bun.stringWidth(segment);
+		if (width + nextWidth > budget) break;
+		shown += segment;
+		width += nextWidth;
+	}
+	return `${shown}…`;
+}
+
+/** Drop intermediate directories before shortening the first directory or filename. */
+function fitPath(path: string, budget: number): string {
+	if (Bun.stringWidth(path) <= budget) return path;
+	const lastSlash = path.lastIndexOf("/");
+	if (lastSlash < 0) return fitName(path, budget);
+	const filename = path.slice(lastSlash + 1);
+	// Keep the filesystem root with the first directory for absolute/UNC paths.
+	const first = path.match(/^(?:[A-Za-z]:\/|\/\/[^/]+\/[^/]+\/|\/)?[^/]+/)?.[0] ?? "";
+	if (first.length < lastSlash) {
+		let rest = path.slice(first.length + 1);
+		while (rest.includes("/")) {
+			rest = rest.slice(rest.indexOf("/") + 1);
+			const candidate = `${first}/…/${rest}`;
+			if (Bun.stringWidth(candidate) <= budget) return candidate;
+		}
+	}
+	const separator = first.length < lastSlash ? "/…/" : "/";
+	const firstBudget = budget - Bun.stringWidth(filename) - separator.length;
+	if (firstBudget > 0) {
+		return `${fitName(first, firstBudget)}${separator}${filename}`;
+	}
+	// At very narrow widths the filename takes priority over directory context.
+	return fitName(filename, budget);
 }
 
 /**
  * One-line status for the TUI status bar, Claude-Code style:
  * ` src/foo.ts:12-34` for a range, ` src/foo.ts:7` for a caret/same-line
  * range. ANSI is stripped by the status sanitizer, so decoration is limited
- * to a Nerd Font file glyph + smart truncation.
+ * to the current theme's file symbol + smart truncation.
  */
-export function formatSelectionStatus(sel: Selection, cwd: string): string {
+export function formatSelectionStatus(sel: Selection, cwd: string, icon: string, columns: number): string {
 	const startLine = sel.start.line + 1;
 	const endLine = sel.end.line + 1;
 	const suffix = startLine === endLine ? `:${startLine}` : `:${startLine}-${endLine}`;
 	const path = displayPath(sel.uri, cwd);
-	const shown = ellipsizeMiddle(path, STATUS_WIDTH_BUDGET - 2 - suffix.length);
-	// Nerd Font file glyph U+F15B as an escape: a literal PUA char does not
-	// survive the edit toolchain (it arrives as a plain space).
-	return `\u{F15B} ${shown}${suffix}`;
+	const budget = Math.max(0, Math.floor(columns * 0.8));
+	if (budget < suffix.length) return fitName(suffix, budget);
+	const prefix = icon && Bun.stringWidth(icon) + 1 + suffix.length < budget ? `${icon} ` : "";
+	const shown = fitPath(path, budget - Bun.stringWidth(prefix) - suffix.length);
+	return `${prefix}${shown}${suffix}`;
 }
 
 /** Null when there is nothing worth the model's attention. */

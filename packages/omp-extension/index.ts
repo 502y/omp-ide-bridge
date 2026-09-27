@@ -5,7 +5,7 @@
  * Wire protocol: ../../docs/protocol.md (IDE = WS server, OMP = client).
  */
 
-import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import { theme, type ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { formatSelectionStatus } from "./src/context";
 import { OmpIdeBridge } from "./src/core";
 import { scanCandidates } from "./src/lockfile";
@@ -25,12 +25,18 @@ export default function ideBridge(pi: ExtensionAPI) {
 
 	let ui: UiHandle | null = null;
 	let cwd = "";
+	let selection: Selection | null = null;
+	const refreshStatus = () => {
+		ui?.setStatus("ide", selection === null ? "" : formatSelectionStatus(
+			selection, cwd, theme.symbol("icon.file"), process.stdout.columns ?? 80,
+		));
+	};
 
 	const bridge = new OmpIdeBridge({
 		onStatus: (msg) => ui?.notify(msg, "info"),
 		onSelectionStatus: (sel: Selection | null) => {
-			// Live IDE selection in the status bar (empty string clears the slot).
-			ui?.setStatus("ide", sel === null ? "" : formatSelectionStatus(sel, cwd));
+			selection = sel;
+			refreshStatus();
 		},
 		onAtMentioned: (m: AtMention) => {
 			pi.sendMessage(
@@ -49,11 +55,16 @@ export default function ideBridge(pi: ExtensionAPI) {
 	pi.on("session_start", async (_event, ctx) => {
 		ui = ctx.ui as unknown as UiHandle;
 		cwd = ctx.cwd;
+		process.stdout.off("resize", refreshStatus);
+		process.stdout.on("resize", refreshStatus);
 		bridge.start(ctx.cwd);
 	});
 
 	pi.on("session_shutdown", async () => {
 		bridge.stop();
+		process.stdout.off("resize", refreshStatus);
+		selection = null;
+		ui = null;
 	});
 
 	// Per-turn injection of the live IDE state (deduped inside the bridge).

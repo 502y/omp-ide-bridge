@@ -114,6 +114,8 @@ cd packages/jetbrains-plugin
 ## 在 OMP 中使用
 
 - 直接对话：代理会在每轮自动看到当前文件和选区。
+- 状态栏文件图标在每次 IDE 选区更新时跟随 OMP 当前的符号预设（Unicode、Nerd Font 或 ASCII）及主题自定义图标。
+- 文件状态项最多占终端宽度的 80%，窗口缩放时自动刷新。长路径优先保留第一级目录和文件名，省略中间目录；极窄窗口下先缩减目录信息，再缩短文件名。无法获取终端尺寸时按 80 列计算。
 - `/ide`：查看连接状态和发现的 IDE；`/ide 2`：连接第 2 个 IDE；`/ide off`：断开连接。
 - 连接后模型可以调用：`ide_get_editor_context`、`ide_open_file`、
   `ide_get_diagnostics`、`ide_save_document` 和 `ide_open_diff`。

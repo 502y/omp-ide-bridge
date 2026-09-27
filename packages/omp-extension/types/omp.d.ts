@@ -6,6 +6,10 @@
  * touches (docs/extensions.md). Members we don't use are intentionally absent.
  */
 declare module "@oh-my-pi/pi-coding-agent" {
+	export const theme: {
+		symbol(key: "icon.file"): string;
+	};
+
 	export interface ExtensionUIContextLike {
 		notify(text: string, level?: string): void;
 		setStatus(key: string, text: string): void;

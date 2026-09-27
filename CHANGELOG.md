@@ -2,7 +2,21 @@
 
 All notable changes to this project are documented here. The project follows semantic versioning after the first stable release; pre-1.0 releases may change integration details.
 
-## 0.1.0 - Unreleased
+## 0.1.1 - 2026-09-27
+
+### Fixed
+
+- Status-bar file icons now follow OMP's active theme symbols instead of requiring Nerd Font; path truncation accounts for the icon's display width.
+
+### Changed
+
+- File status width now scales to 80% of terminal columns and refreshes on resize, preserving the first directory and filename before intermediate directories.
+
+### Compatibility
+
+- This release updates only the OMP extension. The VS Code and JetBrains plugins remain at 0.1.0 and require no update.
+
+## 0.1.0 - 2026-08-17
 
 ### Added
 

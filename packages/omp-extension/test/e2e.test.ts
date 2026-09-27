@@ -465,15 +465,15 @@ describe("buildIdeContext", () => {
 			end: { line: end, character: 3 },
 			text: "x",
 		});
-		expect(formatSelectionStatus(sel(11, 13), PROJ)).toBe("\u{F15B} src/a.ts:12-14");
-		expect(formatSelectionStatus(sel(6, 6), PROJ)).toBe("\u{F15B} src/a.ts:7");
-		const outsideStatus = formatSelectionStatus(sel(0, 0), ELSEWHERE);
+		expect(formatSelectionStatus(sel(11, 13), PROJ, "\u{F15B}", 80)).toBe("\u{F15B} src/a.ts:12-14");
+		expect(formatSelectionStatus(sel(6, 6), PROJ, "\u{F15B}", 80)).toBe("\u{F15B} src/a.ts:7");
+		const outsideStatus = formatSelectionStatus(sel(0, 0), ELSEWHERE, "\u{F15B}", 200);
 		expect(outsideStatus).toStartWith("\u{F15B} ");
-		expect(outsideStatus).toEndWith("st-project/src/a.ts:1");
-		expect(outsideStatus.length).toBeLessThanOrEqual(50);
+		expect(outsideStatus).toContain("/src/a.ts:1");
+		expect(Bun.stringWidth(outsideStatus)).toBeLessThanOrEqual(160);
 	});
 
-	test("formatSelectionStatus: long paths middle-truncate, line suffix survives", () => {
+	test.each(["\u{F15B}", "\u{1F4C4}", "[F]", ""])("formatSelectionStatus: icon %s fits with a long path and line suffix", (icon) => {
 		const deep = join(
 			PROJ,
 			"very",
@@ -495,11 +495,44 @@ describe("buildIdeContext", () => {
 				text: "",
 			},
 			PROJ,
+			icon,
+			55,
 		);
-		expect(out.length).toBeLessThanOrEqual(46);
+		expect(Bun.stringWidth(out)).toBeLessThanOrEqual(44);
+		expect(out).toStartWith(icon ? `${icon} ` : "very/");
 		expect(out).toEndWith(":123");
 		expect(out).toContain("…");
 		expect(out).toContain("file-name.ts");
+		expect(out).toContain("very/…/");
+	});
+
+	test("formatSelectionStatus: terminal width restores the complete path", () => {
+		const path = "packages/omp-extension/src/very-long-directory/editor-selection-handler.ts";
+		const sel: Selection = {
+			uri: pathToUri(join(PROJ, path)),
+			start: { line: 65, character: 0 },
+			end: { line: 73, character: 0 },
+			text: "",
+		};
+		const narrow = formatSelectionStatus(sel, PROJ, "\u{1F4C4}", 64);
+		expect(narrow).toBe("\u{1F4C4} packages/…/editor-selection-handler.ts:66-74");
+		expect(Bun.stringWidth(narrow)).toBeLessThanOrEqual(Math.floor(64 * 0.8));
+		expect(formatSelectionStatus(sel, PROJ, "\u{1F4C4}", 120)).toBe(`\u{1F4C4} ${path}:66-74`);
+	});
+
+	test("formatSelectionStatus: wide filenames and tiny terminals stay within budget", () => {
+		const sel: Selection = {
+			uri: pathToUri(join(PROJ, "目录", "nested", "非常长的文件名称👩‍💻.ts")),
+			start: { line: 9, character: 0 },
+			end: { line: 9, character: 0 },
+			text: "",
+		};
+		for (const columns of [0, 1, 4, 10, 30, 50]) {
+			const out = formatSelectionStatus(sel, PROJ, "\u{1F4C4}", columns);
+			expect(Bun.stringWidth(out)).toBeLessThanOrEqual(Math.floor(columns * 0.8));
+			if (columns >= 4) expect(out).toEndWith(":10");
+		}
+		expect(formatSelectionStatus(sel, PROJ, "", 40)).toContain("目录/…/");
 	});
 
 	test("selection text truncated at 2000 chars", () => {

@@ -119,6 +119,8 @@ Wire contract: [docs/protocol.md](docs/protocol.md). Packages:
 ## Usage in OMP
 
 - Just talk — the agent sees your active file/selection each turn.
+- The status-bar file icon follows OMP's current symbol preset (Unicode, Nerd Font, or ASCII) and theme overrides on each IDE selection update.
+- The file status uses at most 80% of the terminal width and refreshes on resize. Long paths preserve the first directory and filename before intermediate directories; extremely narrow terminals shorten directory context, then the filename. Without terminal dimensions, an 80-column terminal is assumed.
 - `/ide` — connection status + discovered IDEs; `/ide 2` — connect to #2; `/ide off`.
 - Tools the model can call while connected:
   `ide_get_editor_context`, `ide_open_file`, `ide_get_diagnostics`,
