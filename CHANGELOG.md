@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. The project follows semantic versioning after the first stable release; pre-1.0 releases may change integration details.
 
+## 0.1.2 - 2026-10-07
+
+### Fixed
+
+- Read status-bar theme symbols from the host UI context, avoiding an unresolved runtime import of `@oh-my-pi/pi-coding-agent` in standalone OMP installations.
+
+### Compatibility
+
+- This release updates only the OMP extension. The VS Code and JetBrains plugins remain at 0.1.0 and require no update.
+
 ## 0.1.1 - 2026-09-27
 
 ### Fixed

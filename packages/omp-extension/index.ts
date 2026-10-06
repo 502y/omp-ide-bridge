@@ -5,13 +5,14 @@
  * Wire protocol: ../../docs/protocol.md (IDE = WS server, OMP = client).
  */
 
-import { theme, type ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { formatSelectionStatus } from "./src/context";
 import { OmpIdeBridge } from "./src/core";
 import { scanCandidates } from "./src/lockfile";
 import type { AtMention, Selection } from "./src/protocol";
 
 interface UiHandle {
+	readonly theme: { symbol(key: "icon.file"): string };
 	notify(text: string, level?: string): void;
 	setStatus(key: string, text: string): void;
 }
@@ -28,7 +29,7 @@ export default function ideBridge(pi: ExtensionAPI) {
 	let selection: Selection | null = null;
 	const refreshStatus = () => {
 		ui?.setStatus("ide", selection === null ? "" : formatSelectionStatus(
-			selection, cwd, theme.symbol("icon.file"), process.stdout.columns ?? 80,
+			selection, cwd, ui.theme.symbol("icon.file"), process.stdout.columns ?? 80,
 		));
 	};
 
