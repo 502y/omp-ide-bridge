@@ -24,6 +24,54 @@ declare module "@oh-my-pi/pi-coding-agent" {
 		isError?: boolean;
 	}
 
+	export interface ToolCallEvent {
+		type: "tool_call";
+		toolName: string;
+		toolCallId: string;
+		input: Record<string, unknown>;
+	}
+
+	export interface EditToolPerFileResult {
+		path: string;
+		diff: string;
+		op?: "create" | "delete" | "update";
+		move?: string;
+		sourcePath?: string;
+		oldText?: string;
+		newText?: string;
+		isError?: boolean;
+		snapshotsPruned?: boolean;
+	}
+
+	export interface EditToolDetails {
+		diff: string;
+		path?: string;
+		op?: "create" | "delete" | "update";
+		move?: string;
+		sourcePath?: string;
+		oldText?: string;
+		newText?: string;
+		snapshotsPruned?: boolean;
+		perFileResults?: EditToolPerFileResult[];
+	}
+
+	export interface ToolResultEvent {
+		type: "tool_result";
+		toolName: string;
+		toolCallId: string;
+		input: Record<string, unknown>;
+		content: unknown[];
+		details: unknown;
+		isError: boolean;
+	}
+
+	export interface AgentEndEvent {
+		type: "agent_end";
+		messages: unknown[];
+		willContinue?: boolean;
+		awaitingAsyncWork?: boolean;
+	}
+
 	export interface ZodScalar {
 		describe(text: string): ZodScalar;
 		optional(): ZodScalar;
@@ -53,6 +101,9 @@ declare module "@oh-my-pi/pi-coding-agent" {
 		/** The zod/v4 module object; destructure `z` from it. */
 		zod: { z: ZodLite };
 		setLabel(label: string): void;
+		on(event: "tool_call", handler: (event: ToolCallEvent, ctx: ExtensionContextLike) => void | Promise<void>): void;
+		on(event: "tool_result", handler: (event: ToolResultEvent, ctx: ExtensionContextLike) => void | Promise<void>): void;
+		on(event: "agent_end", handler: (event: AgentEndEvent, ctx: ExtensionContextLike) => void): void;
 		on(event: string, handler: (event: never, ctx: ExtensionContextLike) => unknown): void;
 		registerTool<P>(def: ToolDefinitionLike<P>): void;
 		registerCommand(

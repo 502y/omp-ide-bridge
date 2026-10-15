@@ -125,6 +125,18 @@ Wire contract: [docs/protocol.md](docs/protocol.md). Packages:
 - Tools the model can call while connected:
   `ide_get_editor_context`, `ide_open_file`, `ide_get_diagnostics`,
   `ide_save_document`, `ide_open_diff` (VS Code only; waits for accept/reject).
+- JetBrains automatically opens a native **Diff Window** with read-only panes after OMP's
+  `edit` or `write` tool changes a local UTF-8 text file. Left: before OMP; right:
+  after OMP. New/deleted files and multi-file edits are supported.
+  **Accept** keeps the change and closes the window; **Refuse** restores the
+  before-state, including removing new files or recreating deleted files.
+  Refuse is blocked if the disk content changed again or the IDE has unsaved edits.
+  Closing the window without either button leaves the change in place.
+  Review still does not pause the agent.
+- Automatic diffs require both the updated JetBrains plugin and OMP extension.
+  Snapshots are limited to 1 MiB per side. Shell commands, internal URLs,
+  archive members, SQLite targets, and binary files are not automatically reviewed.
+  Existing IDEs without the optional `showDiff` capability continue unchanged.
 
 ## Development
 

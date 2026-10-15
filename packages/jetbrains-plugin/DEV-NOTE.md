@@ -24,7 +24,7 @@ Prerequisites: JDK 17+ (wrapper is committed).
 
 ```bash
 cd packages/jetbrains-plugin
-./gradlew buildPlugin                    # -> build/distributions/omp-ide-bridge-jetbrains-0.1.0.zip
+./gradlew buildPlugin                    # -> build/distributions/omp-ide-bridge-jetbrains-0.1.1.zip
 ./gradlew verifyPlugin                   # binary compatibility vs the compile SDK
 ./gradlew runIde                         # manual smoke test in a sandbox IDE
 ```
@@ -46,7 +46,22 @@ Target SDK is pinned in `gradle.properties` (`platformType=IC`, `platformVersion
 Diagnostics use the semi-internal `DaemonCodeAnalyzerEx.processHighlights` API to
 read already-computed highlights. The plugin verifier accepts it on both tested
 IDE versions, but it remains a compatibility risk because it is not public API.
-`openDiff` is intentionally unsupported and returns `-32601`.
+`showDiff` opens JetBrains' built-in nonmodal Diff View for read-only before/after
+text snapshots. It uses the URI filename for syntax highlighting and associates
+the view with the matching open project (falling back to the active project).
+Opening the view does not require a disk file. Required `oldExists`/`newExists`
+flags distinguish absent files from empty files. The RPC returns
+`{ "opened": true }` without waiting for a decision. Accept keeps the applied
+change; Refuse restores original UTF-8 bytes through a VFS write command only if
+current disk bytes still match the after-snapshot and no editor changes are unsaved.
+Refuse removes a created file or recreates a deleted file; conflicting requests
+leave the window open with an inline warning, without a blocking dialog.
+Closing the window does not revert. VFS lookup/refresh runs on a pooled worker;
+document checks and the write command return to an EDT write-safe context.
+The native diff panel and buttons share a nonmodal `WindowWrapper`; disposal
+releases diff editors and plugin disposal closes outstanding review windows.
+`openDiff` remains unsupported (`-32601`): unlike post-edit `showDiff`, its protocol
+waits for approval before applying a proposal.
 
 Services are **light services** (`@Service` annotation) and deliberately NOT declared in
 `plugin.xml` — the platform forbids double registration.
@@ -69,8 +84,14 @@ Services are **light services** (`@Service` annotation) and deliberately NOT dec
   mode `0600` with directory `0700`, or current-user profile ACL on Windows.
 - Workspace folders update on project open/close and `workspace_changed` broadcasts.
 - Two simultaneous OMP clients connect and both receive notifications.
-- `initialize` advertises `openDiff:false`, `diagnostics:true`, `executeCode:false`;
-  `openDiff` returns `-32601`.
+- `initialize` advertises `showDiff:true`, `openDiff:false`, `diagnostics:true`,
+  `executeCode:false`; `openDiff` returns `-32601`.
+- `showDiff` validates `uri`, `oldText`, `newText`, `oldExists`, `newExists`, and
+  optional `tabName`, then opens native read-only panes with Accept/Refuse buttons.
+  Check edits, additions, deletions (including empty files), repeated requests,
+  stale disk snapshots, dirty documents, and project/plugin disposal.
+  The RPC must return promptly. Accept and window close must preserve disk contents;
+  Refuse must restore only the reviewed change, never later edits.
 - `selection_changed` is debounced to ≤150 ms and carries 0-based positions;
   `getLatestSelection` survives focus loss.
 - Threading: no EDT freezes during `openFile`/`saveDocument`/`closeTab` round trips

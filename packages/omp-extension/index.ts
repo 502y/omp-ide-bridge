@@ -6,6 +6,7 @@
  */
 
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import { AutoDiff } from "./src/auto-diff";
 import { formatSelectionStatus } from "./src/context";
 import { OmpIdeBridge } from "./src/core";
 import { scanCandidates } from "./src/lockfile";
@@ -52,8 +53,36 @@ export default function ideBridge(pi: ExtensionAPI) {
 			ui?.notify("IDE selection mentioned — will be included next turn", "info");
 		},
 	});
+	const autoDiff = new AutoDiff(bridge);
+
+	pi.on("tool_call", async (event, ctx) => {
+		await autoDiff.beforeTool(event, ctx.cwd);
+	});
+
+	pi.on("tool_result", async (event) => {
+		await autoDiff.afterTool(event);
+	});
+
+	pi.on("agent_end", (event) => {
+		if (!event.willContinue && !event.awaitingAsyncWork) {
+			autoDiff.clear();
+		}
+	});
+
+	pi.on("session_switch", () => {
+		autoDiff.clear();
+	});
+
+	pi.on("session_branch", () => {
+		autoDiff.clear();
+	});
+
+	pi.on("session_tree", () => {
+		autoDiff.clear();
+	});
 
 	pi.on("session_start", async (_event, ctx) => {
+		autoDiff.clear();
 		ui = ctx.ui as unknown as UiHandle;
 		cwd = ctx.cwd;
 		process.stdout.off("resize", refreshStatus);
@@ -62,6 +91,7 @@ export default function ideBridge(pi: ExtensionAPI) {
 	});
 
 	pi.on("session_shutdown", async () => {
+		autoDiff.clear();
 		bridge.stop();
 		process.stdout.off("resize", refreshStatus);
 		selection = null;
@@ -193,6 +223,7 @@ export default function ideBridge(pi: ExtensionAPI) {
 			const uiCtx = ctx.ui as unknown as UiHandle;
 			const arg = args.trim();
 			if (arg === "off") {
+				autoDiff.clear();
 				bridge.disconnect();
 				uiCtx.notify("IDE bridge disconnected", "info");
 				return;
@@ -205,6 +236,7 @@ export default function ideBridge(pi: ExtensionAPI) {
 					uiCtx.notify(`No IDE #${arg}; run /ide to list`, "warning");
 					return;
 				}
+				autoDiff.clear();
 				const ok = await bridge.connectTo(target.port);
 				uiCtx.notify(
 					ok ? `Connected to ${target.lock.ideName}` : "Connection failed",

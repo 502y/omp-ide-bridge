@@ -5,9 +5,11 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ToolCallEvent, ToolResultEvent } from "@oh-my-pi/pi-coding-agent";
+import { AutoDiff } from "../src/auto-diff";
 import { BridgeClient } from "../src/bridge-client";
 import { buildIdeContext, formatSelectionStatus, type IdeSnapshot } from "../src/context";
 import { OmpIdeBridge } from "../src/core";
@@ -229,6 +231,258 @@ describe("OmpIdeBridge e2e", () => {
 		};
 		expect(diff.status).toBe("accepted");
 		expect(fx.mock.lastCall("openDiff")?.params.newText).toBe("new content");
+	});
+
+	test("showDiff is optional and does not change the openDiff capability", async () => {
+		fx.bridge.start(PROJ);
+		await waitFor(() => fx.bridge.connected);
+		expect(fx.bridge.supportsShowDiff).toBe(false);
+		expect(fx.bridge.supportsDiff).toBe(true);
+		await expect(fx.bridge.showDiff(A_TS, "before", "after", true, true))
+			.rejects.toThrow("does not support showDiff");
+		const autoDiff = new AutoDiff(fx.bridge);
+		const path = join(fx.dir, "unsupported.txt");
+		writeFileSync(path, "before");
+		const event: ToolCallEvent = {
+			type: "tool_call", toolCallId: "unsupported", toolName: "write", input: { path, content: "after" },
+		};
+		await autoDiff.beforeTool(event, fx.dir);
+		writeFileSync(path, "after");
+		await autoDiff.afterTool({ ...event, type: "tool_result", content: [], details: undefined, isError: false });
+		expect(fx.mock.countCalls("showDiff")).toBe(0);
+		expect(readFileSync(path, "utf8")).toBe("after");
+	});
+
+	describe("automatic post-edit diffs", () => {
+		beforeEach(async () => {
+			fx.mock.capabilities.showDiff = true;
+			fx.bridge.start(PROJ);
+			await waitFor(() => fx.bridge.supportsShowDiff);
+		});
+
+		test("parallel writes use each call's disk snapshots, including new files", async () => {
+			const autoDiff = new AutoDiff(fx.bridge);
+			const existing = join(fx.dir, "existing.txt");
+			const created = join(fx.dir, "created.txt");
+			writeFileSync(existing, "before existing\r\n");
+			const first: ToolCallEvent = {
+				type: "tool_call", toolCallId: "first", toolName: "write",
+				input: { path: "existing.txt", content: "proposed, not actual" },
+			};
+			const second: ToolCallEvent = {
+				type: "tool_call", toolCallId: "second", toolName: "write",
+				input: { path: "created.txt", content: "also not actual" },
+			};
+			await Promise.all([autoDiff.beforeTool(first, fx.dir), autoDiff.beforeTool(second, fx.dir)]);
+			writeFileSync(existing, "formatted existing\n");
+			writeFileSync(created, "created on disk\n");
+			await autoDiff.afterTool({ ...second, type: "tool_result", content: [], details: undefined, isError: false });
+			await autoDiff.afterTool({ ...first, type: "tool_result", content: [], details: undefined, isError: false });
+			await waitFor(() => fx.mock.countCalls("showDiff") === 2);
+			expect(fx.mock.calls.filter((call) => call.method === "showDiff").map(({ params }) => ({
+				uri: params.uri, oldText: params.oldText, newText: params.newText,
+			}))).toEqual([
+				{
+					uri: pathToUri(created), oldText: "", newText: "created on disk\n",
+				},
+				{
+					uri: pathToUri(existing), oldText: "before existing\r\n", newText: "formatted existing\n",
+				},
+			]);
+			expect(readFileSync(existing, "utf8")).toBe("formatted existing\n");
+			expect(readFileSync(created, "utf8")).toBe("created on disk\n");
+		});
+
+		test("empty file creation and deletion remain distinguishable for Refuse", async () => {
+			const autoDiff = new AutoDiff(fx.bridge);
+			const path = join(fx.dir, "empty.txt");
+			const create: ToolCallEvent = {
+				type: "tool_call", toolCallId: "empty-create", toolName: "write", input: { path, content: "" },
+			};
+			await autoDiff.beforeTool(create, fx.dir);
+			writeFileSync(path, "");
+			await autoDiff.afterTool({
+				...create, type: "tool_result", content: [], details: undefined, isError: false,
+			});
+			const remove: ToolCallEvent = {
+				type: "tool_call", toolCallId: "empty-delete", toolName: "edit", input: { path },
+			};
+			await autoDiff.beforeTool(remove, fx.dir);
+			rmSync(path);
+			await autoDiff.afterTool({
+				...remove, type: "tool_result", content: [], details: undefined, isError: false,
+			});
+			await waitFor(() => fx.mock.countCalls("showDiff") === 2);
+			expect(fx.mock.calls.filter((call) => call.method === "showDiff").map(({ params }) => ({
+				oldText: params.oldText, newText: params.newText,
+				oldExists: params.oldExists, newExists: params.newExists,
+			}))).toEqual([
+				{ oldText: "", newText: "", oldExists: false, newExists: true },
+				{ oldText: "", newText: "", oldExists: true, newExists: false },
+			]);
+		});
+
+		test("hashline multi-file updates, deletes and quoted moves review every changed path", async () => {
+			const autoDiff = new AutoDiff(fx.bridge);
+			const edited = join(fx.dir, "edited.txt");
+			const deleted = join(fx.dir, "deleted.txt");
+			const source = join(fx.dir, "source.txt");
+			const destination = join(fx.dir, "renamed file.txt");
+			writeFileSync(edited, "old edit\n");
+			writeFileSync(deleted, "deleted text\n");
+			writeFileSync(source, "moved text\n");
+			const event: ToolCallEvent = {
+				type: "tool_call", toolCallId: "multi", toolName: "edit",
+				input: {
+					paths: ["edited.txt", "deleted.txt", "source.txt"],
+					input: "*** Begin Patch\n[edited.txt#A1B2]\nPUT 1.=1:\n+new edit\n" +
+						"[deleted.txt#A1B2]\nREM\n[source.txt#A1B2]\nMV \"renamed file.txt\"\n*** End Patch\n",
+				},
+			};
+			await autoDiff.beforeTool(event, fx.dir);
+			writeFileSync(edited, "new edit\n");
+			rmSync(deleted);
+			renameSync(source, destination);
+			await autoDiff.afterTool({
+				...event, type: "tool_result", content: [], isError: false,
+				details: {
+					diff: "",
+					perFileResults: [
+						{ path: edited, diff: "", op: "update", oldText: "old edit\n", newText: "not used" },
+						{ path: deleted, diff: "", op: "delete", oldText: "deleted text\n" },
+						{ path: destination, sourcePath: source, move: destination, diff: "", op: "update" },
+					],
+				},
+			});
+			await waitFor(() => fx.mock.countCalls("showDiff") === 4);
+			const snapshots = fx.mock.calls.filter((call) => call.method === "showDiff").map(({ params }) => ({
+				uri: params.uri, oldText: params.oldText, newText: params.newText,
+			}));
+			expect(snapshots).toEqual([
+				{ uri: pathToUri(edited), oldText: "old edit\n", newText: "new edit\n" },
+				{ uri: pathToUri(deleted), oldText: "deleted text\n", newText: "" },
+				{ uri: pathToUri(source), oldText: "moved text\n", newText: "" },
+				{ uri: pathToUri(destination), oldText: "", newText: "moved text\n" },
+			]);
+			expect(existsSync(deleted)).toBe(false);
+			expect(existsSync(source)).toBe(false);
+			expect(readFileSync(destination, "utf8")).toBe("moved text\n");
+		});
+
+		test("structured patch rename captures an overwritten destination and partial failure", async () => {
+			const autoDiff = new AutoDiff(fx.bridge);
+			const source = join(fx.dir, "old.txt");
+			const destination = join(fx.dir, "new.txt");
+			writeFileSync(source, "source text");
+			writeFileSync(destination, "destination text");
+			const event: ToolCallEvent = {
+				type: "tool_call", toolCallId: "rename", toolName: "edit",
+				input: { path: "old.txt", edits: [{ op: "update", rename: "new.txt", diff: "@@" }] },
+			};
+			await autoDiff.beforeTool(event, fx.dir);
+			renameSync(source, destination);
+			await autoDiff.afterTool({
+				...event, type: "tool_result", content: [], details: undefined, isError: true,
+			});
+			await waitFor(() => fx.mock.countCalls("showDiff") === 2);
+			expect(fx.mock.lastCall("showDiff")?.params).toMatchObject({
+				uri: pathToUri(destination), oldText: "destination text", newText: "source text",
+			});
+		});
+
+		test("apply_patch paths and hashline-wrapped write paths use actual snapshots", async () => {
+			const autoDiff = new AutoDiff(fx.bridge);
+			const path = join(fx.dir, "apply.txt");
+			const created = join(fx.dir, "added.txt");
+			writeFileSync(path, "old");
+			const event: ToolCallEvent = {
+				type: "tool_call", toolCallId: "apply", toolName: "edit",
+				input: { input: "*** Begin Patch\n*** Update File: apply.txt\n@@\n-old\n+new\n" +
+					"*** Add File: added.txt\n+added\n*** End Patch\n" },
+			};
+			await autoDiff.beforeTool(event, fx.dir);
+			writeFileSync(path, "new");
+			writeFileSync(created, "added");
+			await autoDiff.afterTool({ ...event, type: "tool_result", content: [], details: undefined, isError: false });
+			const write: ToolCallEvent = {
+				type: "tool_call", toolCallId: "wrapped", toolName: "write",
+				input: { path: "[added.txt#A1B2]", content: "proposed" },
+			};
+			await autoDiff.beforeTool(write, fx.dir);
+			writeFileSync(created, "actual");
+			await autoDiff.afterTool({ ...write, type: "tool_result", content: [], details: undefined, isError: false });
+			await waitFor(() => fx.mock.countCalls("showDiff") === 3);
+			expect(fx.mock.lastCall("showDiff")?.params).toMatchObject({
+				uri: pathToUri(created), oldText: "added", newText: "actual",
+			});
+		});
+
+		test("no-ops, unsupported tools, internal URIs, binary and oversized files are skipped", async () => {
+			const autoDiff = new AutoDiff(fx.bridge);
+			const unchanged = join(fx.dir, "unchanged.txt");
+			const binary = join(fx.dir, "binary.dat");
+			const invalidUtf8 = join(fx.dir, "invalid.dat");
+			const large = join(fx.dir, "large.txt");
+			writeFileSync(unchanged, "same");
+			writeFileSync(binary, Buffer.from([1, 0, 2]));
+			writeFileSync(invalidUtf8, Buffer.from([0xFF, 0xFE]));
+			writeFileSync(large, Buffer.alloc(1024 * 1024 + 1, 65));
+			const paths = [unchanged, binary, invalidUtf8, large, "local://plan.txt", "xd://ast_edit"];
+			for (const [index, path] of paths.entries()) {
+				const event: ToolCallEvent = {
+					type: "tool_call", toolCallId: `skip-${index}`, toolName: "write", input: { path, content: "same" },
+				};
+				await autoDiff.beforeTool(event, fx.dir);
+				if (path === binary || path === invalidUtf8 || path === large) {
+					writeFileSync(path, "now valid text");
+				}
+				await autoDiff.afterTool({
+					...event, type: "tool_result", content: [], details: undefined, isError: index === 0,
+				});
+			}
+			const shell: ToolCallEvent = {
+				type: "tool_call", toolCallId: "shell", toolName: "bash", input: { path: unchanged, command: "ignored" },
+			};
+			await autoDiff.beforeTool(shell, fx.dir);
+			writeFileSync(unchanged, "shell edit");
+			await autoDiff.afterTool({ ...shell, type: "tool_result", content: [], details: undefined, isError: false });
+			const internal: ToolCallEvent = {
+				type: "tool_call", toolCallId: "internal", toolName: "edit",
+				input: { path: "local://private.txt" },
+			};
+			await autoDiff.beforeTool(internal, fx.dir);
+			await autoDiff.afterTool({
+				...internal, type: "tool_result", content: [], isError: false,
+				details: { path: unchanged, diff: "", oldText: "private contents", newText: "shell edit" },
+			});
+			await fx.bridge.getEditorContext();
+			expect(fx.mock.countCalls("showDiff")).toBe(0);
+		});
+
+		test("cleanup drops pending snapshots and IDE errors never fail tool results", async () => {
+			const autoDiff = new AutoDiff(fx.bridge);
+			const path = join(fx.dir, "cleanup.txt");
+			writeFileSync(path, "before");
+			const event: ToolCallEvent = {
+				type: "tool_call", toolCallId: "cleanup", toolName: "write", input: { path, content: "after" },
+			};
+			const result: ToolResultEvent = {
+				...event, type: "tool_result", content: [{ type: "text", text: "ok" }], details: undefined, isError: false,
+			};
+			await autoDiff.beforeTool(event, fx.dir);
+			autoDiff.clear();
+			writeFileSync(path, "after");
+			await autoDiff.afterTool(result);
+			expect(fx.mock.countCalls("showDiff")).toBe(0);
+			fx.mock.showDiffError = true;
+			await autoDiff.beforeTool(event, fx.dir);
+			writeFileSync(path, "after again");
+			await expect(autoDiff.afterTool(result)).resolves.toBeUndefined();
+			await waitFor(() => fx.mock.countCalls("showDiff") === 1);
+			expect(result.content).toEqual([{ type: "text", text: "ok" }]);
+			expect(result.isError).toBe(false);
+			expect(readFileSync(path, "utf8")).toBe("after again");
+		});
 	});
 
 	test("reports a refused document save", async () => {

@@ -34,6 +34,7 @@ export interface Diagnostic {
 }
 export interface IdeCapabilities {
 	openDiff: boolean;
+	showDiff?: boolean;
 	diagnostics: boolean;
 	executeCode: boolean;
 }

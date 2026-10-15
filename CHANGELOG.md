@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here. The project follows semantic versioning after the first stable release; pre-1.0 releases may change integration details.
 
+## Unreleased
+
+### Added
+
+- JetBrains native, nonmodal Diff Window with read-only before/after text panes
+  through the optional `showDiff` capability; proposed-change `openDiff` remains separate.
+- Automatic review of local UTF-8 file changes from OMP `edit` and `write` tools,
+  including new/deleted files and multi-file patches, without blocking execution.
+  Snapshots are capped at 1 MiB per side; shell and non-file targets are excluded.
+- Accept and Refuse buttons in JetBrains Diff Window. Refuse restores the previous
+  file state only if no later disk changes or unsaved editor changes would be lost.
+- Explicit snapshot existence flags preserve new/deleted empty-file semantics.
+
 ## 0.1.2 - 2026-10-07
 
 ### Fixed

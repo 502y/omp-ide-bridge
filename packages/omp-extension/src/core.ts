@@ -79,6 +79,10 @@ export class OmpIdeBridge {
 		return this.client?.ide?.capabilities.openDiff ?? false;
 	}
 
+	get supportsShowDiff(): boolean {
+		return this.connected && this.client?.ide?.capabilities.showDiff === true;
+	}
+
 	start(cwd: string): void {
 		this.cwd = cwd;
 		this.stopped = false;
@@ -208,6 +212,31 @@ async getDiagnostics(path?: string): Promise<unknown> {
 			newText,
 			...(tabName !== undefined ? { tabName } : {}),
 		});
+	}
+
+	async showDiff(
+		path: string,
+		oldText: string,
+		newText: string,
+		oldExists: boolean,
+		newExists: boolean,
+		tabName?: string,
+	): Promise<{ opened: true }> {
+		if (!this.supportsShowDiff) {
+			throw new Error("Connected IDE does not support showDiff");
+		}
+		const result = await this.requireClient().call("showDiff", {
+			uri: this.toUri(path),
+			oldText,
+			newText,
+			oldExists,
+			newExists,
+			...(tabName !== undefined ? { tabName } : {}),
+		});
+		if (!readField(result, "opened", (value) => value === true)) {
+			throw new Error(`IDE did not open diff for ${path}`);
+		}
+		return { opened: true };
 	}
 
 	// ---- internals ----

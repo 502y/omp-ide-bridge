@@ -1,7 +1,7 @@
 <idea-plugin url="https://github.com/502y/omp-ide-bridge">
     <id>community.omp.idebridge</id>
     <name>OMP IDE Bridge (Community)</name>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
     <vendor url="https://github.com/502y">502y</vendor>
 
     <description><![CDATA[
@@ -10,6 +10,7 @@
             <li>Shares the active file, current selection, open editors, and IDE diagnostics.</li>
             <li>Lets connected OMP agents open files, save documents, and inspect diagnostics.</li>
             <li>Adds an editor action that mentions the selected code in the next OMP turn.</li>
+            <li>Reviews OMP changes in native Diff Window with Accept and safe Refuse actions.</li>
         </ul>
         <p>
             Communication uses an authenticated WebSocket bound to 127.0.0.1.
@@ -21,10 +22,10 @@
     ]]></description>
 
     <change-notes><![CDATA[
-        <p>Initial community release.</p>
+        <p>Native post-edit diff review with Accept and Refuse.</p>
         <ul>
-            <li>Authenticated protocol v1 bridge with lockfile discovery.</li>
-            <li>Live editor context, diagnostics, file operations, and mention actions.</li>
+            <li>Accept keeps changes; Refuse restores the reviewed file state without overwriting later edits.</li>
+            <li>Supports new and deleted files, including empty files.</li>
             <li>Compatibility verified against IntelliJ IDEA Community 2023.1.7 and 2024.3.1.</li>
         </ul>
     ]]></change-notes>
