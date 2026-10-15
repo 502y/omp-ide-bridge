@@ -100,6 +100,18 @@ Diagnostic= { "uri": string, "range": Range,
 | `saveDocument` | `{uri}` | `{saved: boolean}` |
 | `closeTab` | `{uri}` | `{closed: boolean}` |
 | `openDiff` | `{uri, newText, tabName?}` | `{status: "accepted"\|"rejected", finalText?}` (capability `openDiff`; resolves when the user closes the diff: accepted = saved, rejected = closed without save) |
+| `showDiff` | `{uri, oldText, newText, oldExists, newExists, tabName?}` | `{opened: true}` (optional capability `showDiff`; read-only snapshots with Accept/Refuse actions; returns after opening the native view) |
+
+`showDiff` reviews changes **after** OMP writes them. Accept keeps the applied
+change; Refuse restores the before-state only when disk bytes still match
+`newText`/`newExists` and the IDE document has no unsaved edits. Missing-file
+snapshots must contain empty text; existence flags distinguish missing from empty.
+Refuse removes a new file or recreates a deleted file. Closing the window keeps
+the applied change. Neither the RPC nor OMP waits for a decision.
+Missing `showDiff` capability means unsupported. It is separate from `openDiff`,
+which reviews a proposal before writing and waits for acceptance/rejection.
+JetBrains advertises `showDiff:true` and `openDiff:false`. Update both the
+JetBrains plugin and OMP extension together.
 
 ## 5. Notifications (server → client)
 
@@ -130,6 +142,14 @@ Diagnostic= { "uri": string, "range": Range,
   Results carry `positionConvention: "0-based (LSP)"`.
 - `/ide` command: no args → status + discovered IDEs; `/ide <n>` → connect to n-th;
   `/ide off` → disconnect.
+- When `showDiff` is supported, capture local UTF-8 snapshots on `tool_call` for
+  `edit`/`write`, keyed by `toolCallId`; compare with disk on `tool_result` and
+  submit only changed snapshots. Review failures must not fail the editing tool.
+  A missing file is represented by empty text and an explicit existence flag;
+  creating/deleting an empty file must also open a review. Renames show source
+  removal and destination creation/overwrite. Each snapshot is bounded to 1 MiB; binary,
+  oversized, shell, internal-URL, archive-member, and SQLite edits are excluded.
+  Clear pending snapshots on session shutdown.
 
 ### Injected message format
 

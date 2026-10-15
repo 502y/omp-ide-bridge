@@ -112,6 +112,7 @@ export function initializeResult(x: unknown): InitializeResult {
 		protocolVersion,
 		capabilities: {
 			openDiff: caps.openDiff === true,
+			showDiff: caps.showDiff === true,
 			diagnostics: caps.diagnostics === true,
 			executeCode: caps.executeCode === true,
 		},

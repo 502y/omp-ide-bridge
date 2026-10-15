@@ -24,7 +24,7 @@ data class Selection(val uri: String, val start: Position, val end: Position, va
 
 data class Editor(val uri: String, val isActive: Boolean)
 
-/** Present for protocol completeness; the `diagnostics` capability is NOT implemented in v1. */
+/** Diagnostyka pochodzi z gotowych podswietlen analizatora IDE, bez uruchamiania nowej analizy. */
 data class Diagnostic(
     val uri: String,
     val range: Range,
@@ -102,6 +102,14 @@ fun JsonObject?.requireString(name: String): String {
         throw RpcException.invalidParams("Param '$name' must be a string")
     }
     return el.asString
+}
+
+fun JsonObject?.requireBoolean(name: String): Boolean {
+    val el = this?.get(name) ?: throw RpcException.invalidParams("Missing param '$name'")
+    if (!el.isJsonPrimitive || !el.asJsonPrimitive.isBoolean) {
+        throw RpcException.invalidParams("Param '$name' must be a boolean")
+    }
+    return el.asBoolean
 }
 
 /** @throws RpcException INVALID_PARAMS when present but not a non-negative integer. */

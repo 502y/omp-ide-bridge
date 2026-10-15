@@ -121,6 +121,16 @@ cd packages/jetbrains-plugin
   `ide_get_diagnostics`、`ide_save_document` 和 `ide_open_diff`。
   `ide_open_diff` 仅由 VS Code 插件支持，并会等待用户接受或拒绝修改。
 
+### JetBrains 自动差异窗口
+
+更新 JetBrains 插件和 OMP 扩展后，OMP 的 `edit` 或 `write` 工具修改本地
+UTF-8 文本文件时会自动打开原生只读 Diff Window：左侧为修改前，右侧为修改后。
+支持新建、删除和多文件补丁。Accept 保留修改并关闭窗口；Refuse 恢复修改前的状态，
+包括删除新文件或恢复已删除文件。如果文件已有后续修改或 IDE 中有未保存的编辑，
+Refuse 会拒绝覆盖。直接关闭窗口会保留修改。代理不会等待用户决定。
+每侧快照上限为 1 MiB。Shell 命令、内部 URL、压缩包成员、SQLite 目标和二进制文件
+不参与自动审查。不支持可选 `showDiff` 能力的旧版 IDE 不受影响。
+
 ## 开发
 
 环境要求：Node.js 22+、Bun 1.3.14+ 和 JDK 17。

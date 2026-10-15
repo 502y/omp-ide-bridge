@@ -3,6 +3,7 @@
  * records every request, and lets tests push notifications.
  */
 
+import type { IdeCapabilities } from "../src/protocol";
 import type { AddressInfo } from "node:net";
 import { WebSocketServer, type WebSocket } from "ws";
 
@@ -18,9 +19,10 @@ export class MockIdeServer {
 	editors: unknown[] = [];
 	selection: unknown = null;
 	diagnostics: unknown[] = [];
-	capabilities = { openDiff: true, diagnostics: true, executeCode: false };
+	capabilities: IdeCapabilities = { openDiff: true, diagnostics: true, executeCode: false };
 	protocolVersion = 1;
 	saveResult = true;
+	showDiffError = false;
 
 	private wss: WebSocketServer | null = null;
 	private sockets = new Set<WebSocket>();
@@ -97,6 +99,8 @@ export class MockIdeServer {
 				return { closed: true };
 			case "openDiff":
 				return { status: "accepted", finalText: params.newText ?? "" };
+			case "showDiff":
+				return this.showDiffError ? new Error("diff unavailable") : { opened: true };
 			default:
 				return new Error(`unknown method: ${method}`);
 		}

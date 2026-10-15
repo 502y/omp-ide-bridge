@@ -3,6 +3,10 @@ package com.omp.idebridge
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
+import com.intellij.diff.DiffContentFactory
+import com.intellij.diff.DiffManager
+import com.intellij.diff.requests.SimpleDiffRequest
+import com.intellij.diff.util.DiffUserDataKeys
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.application.ApplicationManager
@@ -10,8 +14,12 @@ import com.intellij.openapi.application.ApplicationNamesInfo
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.ui.WindowWrapper
+import com.intellij.openapi.ui.WindowWrapperBuilder
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.SystemInfo
 import org.java_websocket.WebSocket
 import org.java_websocket.drafts.Draft
@@ -21,6 +29,8 @@ import org.java_websocket.handshake.ServerHandshakeBuilder
 import org.java_websocket.server.WebSocketServer
 import java.net.InetSocketAddress
 import java.net.ServerSocket
+import java.awt.BorderLayout
+import java.awt.FlowLayout
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicReference
 import java.nio.file.FileAlreadyExistsException
@@ -33,6 +43,10 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
+import javax.swing.JButton
+import javax.swing.JLabel
+import javax.swing.JPanel
+import com.intellij.util.ui.JBUI
 
 /**
  * Application-level service owning the single WebSocket server for this IDE instance.
@@ -45,9 +59,9 @@ import java.util.concurrent.TimeUnit
  * - JSON-RPC dispatch is confined: all IntelliJ Platform state is touched on the EDT
  *   (WS worker threads block in invokeAndWait), results are sent back on the WS thread.
  *
- * Capabilities advertised: openDiff=false, diagnostics=true, executeCode=false —
- * `openDiff` returns -32601 (METHOD_NOT_FOUND). Diagnostics are passive daemon
- * highlights (DaemonCodeAnalyzerEx.processHighlights), see ProjectAdapter.
+ * Funkcje: showDiff=true, openDiff=false, diagnostics=true, executeCode=false.
+ * `showDiff` pozwala zachowac zmiane lub bezpiecznie przywrocic poprzedni stan pliku.
+ * Osobny protokol zatwierdzania `openDiff` zwraca -32601 (METHOD_NOT_FOUND).
  *
  * Registered as a light service (@Service); it MUST NOT also be declared in plugin.xml.
  */
@@ -60,6 +74,8 @@ class IdeBridgeServer : Disposable {
     private val startLock = Any()
     private var server: BridgeWebSocketServer? = null
     private var lockfilePath: Path? = null
+    @Volatile
+    private var disposed = false
 
     /** Native absolute paths of open projects' basePaths (lockfile format, protocol.md §1). */
     @Volatile
@@ -138,6 +154,7 @@ class IdeBridgeServer : Disposable {
     }
 
     override fun dispose() {
+        disposed = true
         val s: BridgeWebSocketServer?
         synchronized(startLock) {
             s = server
@@ -305,6 +322,93 @@ class IdeBridgeServer : Disposable {
             JsonObject().apply { addProperty("opened", opened) }
         }
 
+        "showDiff" -> {
+            val uri = params.requireString("uri")
+            val oldText = params.requireString("oldText")
+            val newText = params.requireString("newText")
+            val oldExists = params.requireBoolean("oldExists")
+            val newExists = params.requireBoolean("newExists")
+            if ((!oldExists && oldText.isNotEmpty()) || (!newExists && newText.isNotEmpty())) {
+                throw RpcException.invalidParams("Missing files must have empty text")
+            }
+            val tabName = if (params?.has("tabName") == true) params.requireString("tabName") else null
+            val path = uriToPath(uri)
+            onEdt {
+                if (disposed || ApplicationManager.getApplication().isDisposed) {
+                    throw RpcException(ErrorCodes.INTERNAL_ERROR, "IDE Bridge is shutting down")
+                }
+                val project = projectForPath(path)
+                    ?: throw RpcException.invalidParams("No open project contains $uri")
+                val fileType = FileTypeManager.getInstance().getFileTypeByFileName(path.substringAfterLast('/'))
+                val factory = DiffContentFactory.getInstance()
+                // Migawki tekstowe nie korzystaja z dokumentu na dysku, takze dla nowych i usunietych plikow.
+                val request = SimpleDiffRequest(
+                    tabName ?: "OMP: $path",
+                    factory.create(project, oldText, fileType),
+                    factory.create(project, newText, fileType),
+                    "Before OMP - $path",
+                    "After OMP - $path",
+                )
+                request.putUserData(DiffUserDataKeys.FORCE_READ_ONLY, true)
+                val content = JPanel(BorderLayout())
+                content.preferredSize = JBUI.size(1000, 650)
+                val diffWindow = WindowWrapperBuilder(WindowWrapper.Mode.NON_MODAL, content)
+                    .setProject(project)
+                    .setTitle(tabName ?: "OMP: $path")
+                    .build()
+                Disposer.register(this, diffWindow)
+                val diff = DiffManager.getInstance().createRequestPanel(project, diffWindow, null)
+                diff.setRequest(request)
+                content.add(diff.component, BorderLayout.CENTER)
+                val buttons = JPanel(FlowLayout(FlowLayout.RIGHT))
+                val status = JLabel()
+                val accept = JButton("Accept")
+                val refuse = JButton("Refuse")
+                accept.preferredSize = JBUI.size(96, 44)
+                refuse.preferredSize = JBUI.size(96, 44)
+                accept.addActionListener { diffWindow.close() }
+                refuse.addActionListener {
+                    accept.isEnabled = false
+                    refuse.isEnabled = false
+                    status.text = "Sprawdzanie zmian…"
+                    val application = ApplicationManager.getApplication()
+                    val adapter = ProjectAdapter.getInstance(project)
+                    application.executeOnPooledThread {
+                        var restored = false
+                        var failure: Exception? = null
+                        try {
+                            restored = adapter.refuseDiff(path, oldText, newText, oldExists, newExists)
+                        } catch (error: Exception) {
+                            failure = error
+                            log.warn("OMP IDE Bridge: failed to refuse diff", error)
+                        }
+                        application.invokeLater({
+                            if (content.isDisplayable) {
+                                accept.isEnabled = true
+                                refuse.isEnabled = true
+                                if (failure != null) {
+                                    status.text = "Nie można przywrócić pliku. Sprawdź uprawnienia."
+                                } else if (restored) {
+                                    diffWindow.close()
+                                } else {
+                                    status.text = "Nie cofnięto: plik ma nowsze lub niezapisane zmiany."
+                                }
+                            }
+                        }, ModalityState.defaultModalityState())
+                    }
+                }
+                buttons.add(refuse)
+                buttons.add(accept)
+                val footer = JPanel(BorderLayout(8, 0))
+                footer.border = JBUI.Borders.empty(8)
+                footer.add(status, BorderLayout.CENTER)
+                footer.add(buttons, BorderLayout.EAST)
+                content.add(footer, BorderLayout.SOUTH)
+                diffWindow.show()
+            }
+            JsonObject().apply { addProperty("opened", true) }
+        }
+
         "checkDocumentDirty" -> withFile(params) { adapter, path ->
             JsonObject().apply { addProperty("isDirty", adapter.isDirty(path)) }
         }
@@ -341,6 +445,7 @@ class IdeBridgeServer : Disposable {
         addProperty("protocolVersion", 1)
         add("capabilities", JsonObject().apply {
             addProperty("openDiff", false)
+            addProperty("showDiff", true)
             addProperty("diagnostics", true)
             addProperty("executeCode", false)
         })

@@ -4,6 +4,9 @@ import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerEx
 import com.intellij.codeInsight.daemon.impl.HighlightInfo
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
@@ -18,16 +21,18 @@ import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import java.io.File
+import java.io.IOException
 import java.net.URI
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import java.nio.file.Paths
 
 /**
  * Per-project bridge to IntelliJ Platform APIs (protocol.md §4).
  *
- * All public methods that read IDE state MUST be called on the EDT (or under a read
- * action); IdeBridgeServer dispatches them via invokeAndWait. VFS paths are kept in
- * the platform's '/'-separated form; file:// URI conversion happens only at the
- * boundary (see [pathToUri] / [uriToPath] below).
+ * Metody odczytujace stan IDE dzialaja na EDT lub w akcji odczytu.
+ * Wyjatkiem jest refuseDiff: rozpoczyna prace w tle, a dokumenty i zapis obsluguje na EDT.
+ * Sciezki VFS uzywaja separatora '/'; konwersja file:// odbywa sie na granicy protokolu.
  *
  * Registered as a light service (@Service); it MUST NOT also be declared in plugin.xml.
  */
@@ -138,6 +143,76 @@ class ProjectAdapter(private val project: Project) : Disposable {
         if (!fem.isFileOpen(file)) return false
         fem.closeFile(file)
         return true
+    }
+
+    /** Wywolywane w tle: odswiezenie VFS nie moze blokowac watku interfejsu. */
+    fun refuseDiff(
+        path: String,
+        oldText: String,
+        newText: String,
+        oldExists: Boolean,
+        newExists: Boolean,
+    ): Boolean {
+        val application = ApplicationManager.getApplication()
+        check(!application.isDispatchThread)
+        val target = Paths.get(path)
+        val fileSystem = LocalFileSystem.getInstance()
+        val documents = FileDocumentManager.getInstance()
+        var file = fileSystem.findFileByPath(path)
+        var canRestore = false
+        application.invokeAndWait({
+            val document = file?.let { documents.getCachedDocument(it) }
+            canRestore = !project.isDisposed && (document == null || !documents.isDocumentUnsaved(document))
+        }, ModalityState.defaultModalityState())
+        if (!canRestore) {
+            return false
+        }
+        file?.refresh(false, false)
+        file = fileSystem.refreshAndFindFileByPath(path)?.takeIf { it.isValid }
+        val parent = if (oldExists && file == null) {
+            fileSystem.refreshAndFindFileByPath(target.parent.toString())
+        } else {
+            null
+        }
+        val expectedBytes = newText.toByteArray(StandardCharsets.UTF_8)
+        var restored = false
+        application.invokeAndWait({
+            if (!project.isDisposed) {
+                WriteCommandAction.runWriteCommandAction(project, "OMP: Refuse", null, Runnable {
+                    // Porownujemy dysk tuz przed zapisem; nowsze zmiany nie naleza do tego diffu.
+                    if (newExists) {
+                        if (!Files.isRegularFile(target) || Files.size(target) != expectedBytes.size.toLong() ||
+                            !Files.readAllBytes(target).contentEquals(expectedBytes)) {
+                            return@Runnable
+                        }
+                    } else if (!Files.notExists(target)) {
+                        return@Runnable
+                    }
+                    val document = file?.let { documents.getCachedDocument(it) }
+                    if (document != null && documents.isDocumentUnsaved(document)) {
+                        return@Runnable
+                    }
+                    if (oldExists) {
+                        var restoredFile = file
+                        if (restoredFile == null || !restoredFile.isValid) {
+                            if (parent == null || !parent.isValid || !parent.isDirectory) {
+                                throw IOException("Missing parent directory")
+                            }
+                            restoredFile = parent.createChildData(this, target.fileName.toString())
+                        }
+                        restoredFile.setBinaryContent(oldText.toByteArray(StandardCharsets.UTF_8))
+                    } else {
+                        val createdFile = file
+                        if (createdFile == null || !createdFile.isValid) {
+                            return@Runnable
+                        }
+                        createdFile.delete(this)
+                    }
+                    restored = true
+                })
+            }
+        }, ModalityState.defaultModalityState())
+        return restored
     }
 
     private fun findFile(path: String): VirtualFile =
