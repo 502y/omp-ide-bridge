@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. The project follows semantic versioning after the first stable release; pre-1.0 releases may change integration details.
 
+## 0.1.4 - 2026-11-09
+
+### Fixed
+
+- Keep cross-platform file URI decoding compatible with Bun 1.3.14, which ignores the `fileURLToPath` platform option used in 0.1.3. Decode URI paths independently of the runtime while rejecting encoded path separators.
+
+### Changed
+
+- Add manual, main-branch-only VS Code Marketplace publishing through GitHub Actions OIDC, without stored PAT credentials.
+- IDE plugin versions remain 0.1.1; the runtime compatibility correction is in the OMP extension.
+
 ## 0.1.3 - 2026-11-09
 
 ### Fixed

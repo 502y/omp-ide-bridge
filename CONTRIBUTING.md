@@ -39,9 +39,18 @@ Use tests for new observable contracts and regressions. Runtime-only IDE behavio
 ## Publishing updates
 
 VS Code uses `@vscode/vsce`; JetBrains uses the IntelliJ Platform Gradle
-`publishPlugin` task. Authenticate outside the repository:
+`publishPlugin` task. VS Code releases use GitHub Actions OIDC:
 
-- VS Code: `npx --yes @vscode/vsce login 502y`, or supply `VSCE_PAT` securely.
+- In Marketplace publisher `502y`, create a Trusted Publishing policy for owner
+  `502y`, repository `omp-ide-bridge`, workflow `publish-vscode.yml`, and leave
+  Environment empty. No PAT is needed.
+- Run `.github/workflows/publish-vscode.yml` from `main` with `publish=false` to
+  check/build/smoke/package only; run with `publish=true` to upload that run's
+  verified VSIX. Only the upload job has `id-token: write`.
+- The workflow is manual-only and rejects non-main branches. It never publishes
+  on pull requests or falls back to saved PAT credentials.
+
+JetBrains authentication remains outside the repository:
 - JetBrains: set `intellijPlatformPublishingToken` in the user-level
   `~/.gradle/gradle.properties`, or provide
   `ORG_GRADLE_PROJECT_intellijPlatformPublishingToken` in the publishing process.
@@ -54,7 +63,7 @@ The OMP and IDE plugin version numbers can differ. Run the checks above, then:
 ```sh
 cd packages/vscode-extension
 npx --yes @vscode/vsce package --no-dependencies
-npx --yes @vscode/vsce publish --packagePath omp-ide-bridge-<version>.vsix
+# Marketplace upload: dispatch publish-vscode.yml on main with publish=true.
 
 cd ../jetbrains-plugin
 ./gradlew publishPlugin

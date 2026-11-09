@@ -1,0 +1,63 @@
+name: Publish VS Code extension
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the verified VSIX to Visual Studio Marketplace
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-vscode
+  cancel-in-progress: false
+
+jobs:
+  package:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: packages/vscode-extension/package-lock.json
+      - name: Install dependencies
+        working-directory: packages/vscode-extension
+        run: npm ci
+      - name: Check, build, and smoke test
+        working-directory: packages/vscode-extension
+        run: npm run typecheck && npm run compile && npm run smoke
+      - name: Package verified extension
+        working-directory: packages/vscode-extension
+        run: npx --yes @vscode/vsce@4.1.0 package --no-dependencies --out omp-ide-bridge.vsix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vscode-extension
+          path: packages/vscode-extension/omp-ide-bridge.vsix
+          if-no-files-found: error
+
+  publish:
+    if: inputs.publish && github.ref == 'refs/heads/main'
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension
+          path: release
+      - name: Publish using Marketplace trusted publishing
+        run: npx --yes @vscode/vsce@4.1.0 publish --oidc --packagePath release/omp-ide-bridge.vsix

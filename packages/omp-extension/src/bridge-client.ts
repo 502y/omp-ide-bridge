@@ -84,7 +84,7 @@ export class BridgeClient {
 		ws.onopen = () => {
 			this.call("initialize", {
 				clientName: "omp",
-				clientVersion: "0.1.3",
+				clientVersion: "0.1.4",
 				pid: process.pid,
 			})
 				.then((res) => {

@@ -4,7 +4,7 @@
  */
 
 import { isAbsolute, relative, resolve, sep, win32 } from "node:path";
-import { fileURLToPath } from "node:url";
+import { domainToUnicode } from "node:url";
 
 export interface Position {
 	line: number;
@@ -88,14 +88,18 @@ export function pathToUri(absolutePath: string): string {
 export function uriToPath(uri: string): string {
 	if (!uri.startsWith("file:")) return uri;
 	const url = new URL(uri);
-	// IDE paths need not share the OMP host's OS (e.g. a POSIX file URI
-	// received on Windows). Select the decoder from the URI, not the host.
-	// VS Code can percent-encode the colon in Windows drive letters.
-	const windows = url.hostname !== "" || /^\/[A-Za-z](?::|%3a)\//i.test(url.pathname);
-	const decodedPath = fileURLToPath(url, { windows });
-	return windows && process.platform !== "win32"
-		? decodedPath.replaceAll("\\", "/")
-		: decodedPath;
+	// Bun 1.3 ignores fileURLToPath's `windows` option. Decode the URI
+	// directly so IDE path semantics never depend on the OMP host OS.
+	const drive = /^\/[A-Za-z](?::|%3a)\//i.test(url.pathname);
+	const windows = url.hostname !== "" || drive;
+	if (/%2f/i.test(url.pathname) || (windows && /%5c/i.test(url.pathname))) {
+		throw new TypeError("File URL path must not include encoded path separators");
+	}
+	const decodedPath = decodeURIComponent(url.pathname);
+	const path = url.hostname !== ""
+		? `//${domainToUnicode(url.hostname)}${decodedPath}`
+		: drive ? decodedPath.slice(1) : decodedPath;
+	return windows && process.platform === "win32" ? path.replaceAll("/", "\\") : path;
 }
 
 /** True when `child` is `parent` itself or lives under it (segment boundary). */
