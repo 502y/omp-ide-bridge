@@ -8,6 +8,7 @@ import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ApplicationNamesInfo
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
@@ -61,7 +62,7 @@ class IdeBridgeServer : Disposable {
     private var server: BridgeWebSocketServer? = null
     private var lockfilePath: Path? = null
 
-    /** Native absolute paths of open projects' basePaths (lockfile format, protocol.md §1). */
+    /** Native absolute paths of open projects' base paths and content roots (lockfile format, protocol.md §1). */
     @Volatile
     private var workspaceFolders: List<String> = emptyList()
 
@@ -347,12 +348,7 @@ class IdeBridgeServer : Disposable {
     }
 
     private fun handleGetWorkspaceFolders(): JsonObject {
-        val folders = onEdt {
-            ProjectManager.getInstance().openProjects
-                .filter { !it.isDisposed }
-                .flatMap { ProjectAdapter.getInstance(it).workspaceFolders() }
-                .distinct()
-        }
+        val folders = collectWorkspaceFolders()
         return JsonObject().apply {
             add("folders", JsonArray().apply { folders.forEach { add(pathToUri(it)) } })
         }
@@ -380,12 +376,37 @@ class IdeBridgeServer : Disposable {
         return ProjectManager.getInstance().openProjects.firstOrNull { !it.isDisposed }
     }
 
-    /** Project whose basePath contains [path]; falls back to the active/first open project. */
+    /** Project whose workspace root contains [path], preferring the most specific root. */
     private fun projectForPath(path: String): Project? {
-        val projects = ProjectManager.getInstance().openProjects.filter { !it.isDisposed }
-        return projects.firstOrNull { p -> p.basePath?.let { isUnder(it, path) } == true }
-            ?: activeOrFirstProject()
+        val matchingRoot = collectWorkspaceRoots()
+            .asSequence()
+            .filter { isUnder(it.path, path) }
+            .maxByOrNull { rootSpecificity(it.path) }
+        return matchingRoot?.project ?: activeOrFirstProject()
     }
+
+    private data class WorkspaceRoot(val project: Project, val path: String)
+
+    /**
+     * Reads all roots under the EDT and a read action. Keeping this as the single source
+     * for discovery, RPC responses, and path routing avoids stale base-path-only views.
+     */
+    private fun collectWorkspaceRoots(): List<WorkspaceRoot> = onEdt {
+        ReadAction.compute<List<WorkspaceRoot>, RuntimeException> {
+            ProjectManager.getInstance().openProjects
+                .filter { !it.isDisposed }
+                .flatMap { project ->
+                    ProjectAdapter.getInstance(project).workspaceFolders()
+                        .map { root -> WorkspaceRoot(project, root) }
+                }
+        }
+    }
+
+    private fun collectWorkspaceFolders(): List<String> =
+        collectWorkspaceRoots().map { it.path }.distinct()
+
+    private fun rootSpecificity(root: String): Int =
+        root.replace('\\', '/').trimEnd('/').length
 
     private fun isUnder(base: String, path: String): Boolean {
         val b = base.replace('\\', '/').trimEnd('/')
@@ -401,10 +422,7 @@ class IdeBridgeServer : Disposable {
 
     /** Recomputes workspace folders, rewrites the lockfile, broadcasts workspace_changed on change. */
     fun refreshWorkspace() {
-        val folders = ProjectManager.getInstance().openProjects
-            .filter { !it.isDisposed }
-            .mapNotNull { it.basePath }
-            .distinct()
+        val folders = collectWorkspaceFolders()
         val changed = folders != workspaceFolders
         workspaceFolders = folders
         if (lockfilePath != null) {

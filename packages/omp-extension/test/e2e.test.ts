@@ -110,6 +110,32 @@ describe("OmpIdeBridge e2e", () => {
 		expect(st.candidates[0]?.port).toBe(fx.mock.port);
 	});
 
+	test("secondary-root discovery and live workspace changes reach context", async () => {
+		const roots = [PROJ, ELSEWHERE];
+		writeFileSync(join(fx.dir, `${fx.mock.port}.lock`), JSON.stringify({
+			pid: process.pid, workspaceFolders: roots, ideName: "MockIDE",
+			transport: "ws", runningInWindows: process.platform === "win32", authToken: fx.token,
+		}));
+		fx.mock.folders = roots.map(pathToUri);
+		fx.mock.selection = {
+			uri: pathToUri(A_TS), start: { line: 0, character: 0 },
+			end: { line: 0, character: 5 }, text: "hello",
+		};
+		fx.bridge.start(ELSEWHERE);
+		await waitFor(() => fx.liveSelections.some((s) => s?.text === "hello"));
+		const initial = fx.bridge.getContextInjection();
+		expect(initial).toContain(`Workspace folders:\n- ${PROJ.replaceAll("\\", "/")}\n- ${ELSEWHERE.replaceAll("\\", "/")}`);
+		expect(initial).toContain(`Active file: ${A_TS.replaceAll("\\", "/")}`);
+		expect(initial).toContain("hello");
+		expect(fx.bridge.getContextInjection()).toBeNull();
+
+		fx.mock.folders = [pathToUri(ELSEWHERE)];
+		fx.mock.notify("workspace_changed", { folders: fx.mock.folders });
+		await waitFor(() => fx.bridge.peekContextInjection() !== null);
+		const updated = fx.bridge.getContextInjection();
+		expect(updated).toContain(`Workspace folders:\n- ${ELSEWHERE.replaceAll("\\", "/")}\nActive file:`);
+	});
+
 	test("rejects a wrong auth token with close 1008", async () => {
 		const client = new BridgeClient(fx.mock.port, "wrong-token", {
 			onSelectionChanged: () => {},
@@ -272,7 +298,7 @@ describe("OmpIdeBridge e2e", () => {
 		expect(diag.positionConvention).toBe("0-based (LSP)");
 	});
 
-	test("closing all editors clears status and context injection", async () => {
+	test("closing all editors clears selection while retaining workspace context", async () => {
 		fx.bridge.start(PROJ);
 		await waitFor(() => fx.bridge.connected);
 		fx.bridge.getContextInjection(); // consume initial
@@ -290,7 +316,10 @@ describe("OmpIdeBridge e2e", () => {
 
 		fx.mock.notify("editors_changed", { editors: [] });
 		await waitFor(() => fx.liveSelections.at(-1) === null);
-		expect(fx.bridge.peekContextInjection()).toBeNull();
+		const context = fx.bridge.peekContextInjection();
+		expect(context).toContain("Workspace folders:");
+		expect(context).not.toContain("Active file:");
+		expect(context).not.toContain("some code");
 	});
 
 	test("null selection with editors still open keeps last selection", async () => {
@@ -390,16 +419,21 @@ describe("path helpers", () => {
 	});
 
 	test("decodes empty-authority POSIX file URIs without adding a slash", () => {
-		if (process.platform === "win32") return;
 		expect(uriToPath("file:///tmp/omp-ide-test-project/src/a.ts")).toBe(
 			"/tmp/omp-ide-test-project/src/a.ts",
 		);
+	});
+	test("preserves POSIX filenames and rejects encoded path separators", () => {
+		expect(uriToPath("file:///tmp/a%20%23%25%E4%BD%A0.ts")).toBe("/tmp/a #%你.ts");
+		expect(uriToPath("file://localhost/tmp/a.ts")).toBe("/tmp/a.ts");
+		expect(() => uriToPath("file:///tmp/a%2Fb.ts")).toThrow();
 	});
 
 	test("decodes Windows drive file URIs on every host platform", () => {
 		expect(uriToPath("file:///Z:/Codes/repo/a%20b.ts").replaceAll("\\", "/")).toBe(
 			"Z:/Codes/repo/a b.ts",
 		);
+		expect(uriToPath("file:///c%3A/repo/a%20b.ts").replaceAll("\\", "/")).toBe("c:/repo/a b.ts");
 	});
 
 	test("resolves relative paths against a Windows cwd without host contamination", async () => {
@@ -419,18 +453,18 @@ describe("path helpers", () => {
 		}
 	});
 
-	test("round-trips Windows UNC paths", () => {
-		if (process.platform !== "win32") return;
+	test("decodes UNC paths independently of the host OS", () => {
 		const uncPath = String.raw`\\server\share\repo\a b.ts`;
 		const fileUri = pathToUri(uncPath);
 		expect(fileUri).toBe("file://server/share/repo/a%20b.ts");
-		expect(uriToPath(fileUri)).toBe(uncPath);
+		expect(uriToPath(fileUri).replaceAll("\\", "/")).toBe("//server/share/repo/a b.ts");
 	});
 });
 
 describe("buildIdeContext", () => {
 	const base: IdeSnapshot = {
 		ideName: "MockIDE",
+		folders: [],
 		editors: [],
 		selection: null,
 		diagnostics: [],

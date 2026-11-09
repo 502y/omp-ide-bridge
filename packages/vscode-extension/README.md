@@ -30,6 +30,9 @@ lockfile discovery.
 - Run `/ide` in OMP to inspect or change the active IDE connection.
 - Connected agents can inspect diagnostics, open files, save documents, and open
   reviewable diffs.
+- Multi-root workspaces refresh OMP discovery when folders are added or removed.
+  Update the OMP-side extension to 0.1.3 for the full workspace list in context
+  and cross-platform file URI fixes.
 
 ## Security and privacy
 

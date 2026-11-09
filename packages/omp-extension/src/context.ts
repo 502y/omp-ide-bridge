@@ -8,6 +8,7 @@ import { pathContains, uriToPath, type Diagnostic, type Editor, type Selection }
 
 export interface IdeSnapshot {
 	ideName: string;
+	folders: string[];
 	editors: Editor[];
 	selection: Selection | null;
 	diagnostics: Diagnostic[];
@@ -109,6 +110,9 @@ export function formatSelectionStatus(sel: Selection, cwd: string, icon: string,
 /** Null when there is nothing worth the model's attention. */
 export function buildIdeContext(snap: IdeSnapshot, cwd: string): string | null {
 	const sections: string[] = [];
+	if (snap.folders.length > 0) {
+		sections.push(`Workspace folders:\n${snap.folders.map((uri) => `- ${uriToPath(uri).replaceAll("\\", "/")}`).join("\n")}`);
+	}
 
 	const active = snap.editors.find((e) => e.isActive) ?? null;
 	const sel = snap.selection;

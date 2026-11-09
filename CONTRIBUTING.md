@@ -36,6 +36,37 @@ Keep changes focused. Explain the observable behavior, security implications, an
 
 Use tests for new observable contracts and regressions. Runtime-only IDE behavior that cannot be automated must be recorded in the relevant development note with reproducible manual steps.
 
+## Publishing updates
+
+VS Code uses `@vscode/vsce`; JetBrains uses the IntelliJ Platform Gradle
+`publishPlugin` task. Authenticate outside the repository:
+
+- VS Code: `npx --yes @vscode/vsce login 502y`, or supply `VSCE_PAT` securely.
+- JetBrains: set `intellijPlatformPublishingToken` in the user-level
+  `~/.gradle/gradle.properties`, or provide
+  `ORG_GRADLE_PROJECT_intellijPlatformPublishingToken` in the publishing process.
+  Never commit tokens or include them in command-line arguments.
+
+Update the OMP root/package versions, handshake client version, IDE package
+versions and lock metadata, JetBrains descriptor, and release notes as applicable.
+The OMP and IDE plugin version numbers can differ. Run the checks above, then:
+
+```sh
+cd packages/vscode-extension
+npx --yes @vscode/vsce package --no-dependencies
+npx --yes @vscode/vsce publish --packagePath omp-ide-bridge-<version>.vsix
+
+cd ../jetbrains-plugin
+./gradlew publishPlugin
+```
+
+The VS Code build bundles its runtime dependencies; `--no-dependencies` avoids
+shipping `node_modules`. On Windows use `gradlew.bat` with `JAVA_HOME` set.
+Publish the verified source commit and both archives in the GitHub release as
+well: OMP installs from GitHub, so an IDE-only release does not update OMP code.
+Verify the marketplace version after upload; JetBrains moderation may leave an
+uploaded version pending approval rather than publicly available.
+
 ## Security
 
 Follow `SECURITY.md`. Do not disclose vulnerabilities involving source-code exposure or local authentication tokens in a public issue.

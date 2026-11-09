@@ -84,6 +84,9 @@ Diagnostic= { "uri": string, "range": Range,
 
 - All `uri` values are `file://` URIs (POSIX separators; win32 drive letters as
   `file:///C:/...`). Plugins convert to/from native paths.
+- OMP decodes file URIs according to their path format, independently of its host
+  OS: POSIX paths, Windows drive paths (including percent-encoded drive colons),
+  and UNC authorities. Invalid encoded path separators remain errors.
 
 ## 4. Methods (client → server)
 
@@ -135,6 +138,9 @@ Diagnostic= { "uri": string, "range": Range,
 
 ```
 <ide-context source="<ideName>">
+Workspace folders:
+- /abs/repo-a
+- /abs/repo-b
 Active file: /abs/path.ts (selection lines 12-34)
 <selection language="ts">
 <selected text, hard-capped at 2000 chars>
@@ -145,5 +151,12 @@ Diagnostics: 2 errors, 1 warning
 </ide-context>
 ```
 
-Omit empty sections; inject nothing when there is no active file, no selection,
-and no diagnostics. `display: false`, `attribution: "ide"`, `customType: "ide-context"`.
+Workspace folders are file URIs on the wire and absolute paths in the injected
+message. Pull them on connection and replace the cached list on `workspace_changed`.
+Both IDE implementations refresh discovery lockfiles when roots change; JetBrains
+includes project base paths and module content roots. Files inside the agent cwd
+use relative paths; files outside it use absolute paths to avoid cross-root ambiguity.
+
+Omit empty sections; inject nothing when there are no workspace folders, open
+editors, selection, or diagnostics. `display: false`, `attribution: "ide"`,
+`customType: "ide-context"`.

@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here. The project follows semantic versioning after the first stable release; pre-1.0 releases may change integration details.
 
+## 0.1.3 - 2026-11-09
+
+### Fixed
+
+- Fix Windows context/status rendering throwing `File URL path must be an absolute path` for POSIX file URIs (issue #2); decode POSIX, Windows drive, and UNC paths independently of the OMP host OS.
+- Refresh VS Code discovery lockfiles when workspace folders are added or removed.
+- Include JetBrains module content roots in IDE discovery, track root changes, and route file operations to the project with the most specific matching root.
+
+### Changed
+
+- Include all workspace folders in OMP's injected context and refresh them on workspace changes. Cross-repository files retain unambiguous absolute paths outside OMP's cwd.
+- Dynamic multi-root discovery requires updating both the OMP extension and the relevant IDE plugin.
+
 ## 0.1.2 - 2026-10-07
 
 ### Fixed

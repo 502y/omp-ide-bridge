@@ -19,8 +19,12 @@ const { IdeBridgeServer } = require('../dist/server.js');
 
 const FAKE_WORKSPACE_PATH = path.join(os.tmpdir(), 'omp-fake');
 const FAKE_WORKSPACE_URI = pathToFileURL(FAKE_WORKSPACE_PATH).href;
+const SECOND_WORKSPACE_PATH = path.join(os.tmpdir(), 'omp-fake-secondary');
+const SECOND_WORKSPACE_URI = pathToFileURL(SECOND_WORKSPACE_PATH).href;
+const ADDED_WORKSPACE_PATH = path.join(os.tmpdir(), 'omp-fake-added');
+const ADDED_WORKSPACE_URI = pathToFileURL(ADDED_WORKSPACE_PATH).href;
 const FIRST_FILE_URI = pathToFileURL(path.join(FAKE_WORKSPACE_PATH, 'a.ts')).href;
-const SECOND_FILE_URI = pathToFileURL(path.join(FAKE_WORKSPACE_PATH, 'b.ts')).href;
+const SECOND_FILE_URI = pathToFileURL(path.join(SECOND_WORKSPACE_PATH, 'b.ts')).href;
 
 let failures = 0;
 function check(name, cond, extra) {
@@ -35,16 +39,16 @@ function check(name, cond, extra) {
 function makeFakeAdapter() {
   const handlers = {};
   const state = {
-    folders: [FAKE_WORKSPACE_URI],
+    folders: [FAKE_WORKSPACE_URI, SECOND_WORKSPACE_URI],
     editors: [
       { uri: FIRST_FILE_URI, isActive: true },
       { uri: SECOND_FILE_URI, isActive: false },
     ],
     selection: {
-      uri: FIRST_FILE_URI,
+      uri: SECOND_FILE_URI,
       start: { line: 1, character: 2 },
       end: { line: 3, character: 4 },
-      text: 'const x = 1;',
+      text: 'const y = 2;',
     },
     diagnostics: [
       {
@@ -132,12 +136,16 @@ function makeRpc(ws) {
     }
   });
   const waitNotification = (method, timeoutMs = 3000) => {
-    const found = notifications.find((n) => n.method === method);
+    const takeNotification = () => {
+      const index = notifications.findIndex((n) => n.method === method);
+      return index >= 0 ? notifications.splice(index, 1)[0] : undefined;
+    };
+    const found = takeNotification();
     if (found) return Promise.resolve(found);
     const { promise, resolve, reject } = Promise.withResolvers();
     const timer = setTimeout(() => reject(new Error(`timeout waiting for ${method}`)), timeoutMs);
     const poll = () => {
-      const hit = notifications.find((n) => n.method === method);
+      const hit = takeNotification();
       if (hit) {
         clearTimeout(timer);
         resolve(hit);
@@ -176,7 +184,11 @@ async function main() {
   check('lockfile exists', fs.existsSync(lockPath));
   const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
   check('lockfile pid', lock.pid === process.pid);
-  check('lockfile workspaceFolders are native paths', JSON.stringify(lock.workspaceFolders) === JSON.stringify([FAKE_WORKSPACE_PATH]), JSON.stringify(lock.workspaceFolders));
+  check(
+    'lockfile workspaceFolders are native paths',
+    JSON.stringify(lock.workspaceFolders) === JSON.stringify([FAKE_WORKSPACE_PATH, SECOND_WORKSPACE_PATH]),
+    JSON.stringify(lock.workspaceFolders),
+  );
   check('lockfile ideName', lock.ideName === 'Visual Studio Code');
   check('lockfile transport', lock.transport === 'ws');
   check('lockfile runningInWindows is boolean', typeof lock.runningInWindows === 'boolean');
@@ -235,6 +247,7 @@ async function main() {
   {
     const res = await rpc1.call(3, 'getCurrentSelection');
     check('getCurrentSelection matches adapter', JSON.stringify(res.result) === JSON.stringify({ selection: adapter.state.selection }));
+    check('selection originates in secondary workspace', adapter.state.selection.uri === SECOND_FILE_URI, adapter.state.selection.uri);
   }
   {
     const res = await rpc1.call(4, 'getOpenEditors');
@@ -287,6 +300,48 @@ async function main() {
     adapter.handlers.selection(newSel);
     const n = await p;
     check('selection_changed notification received', JSON.stringify(n.params) === JSON.stringify({ selection: newSel }), JSON.stringify(n.params));
+  }
+
+  // --- workspace roots -> RPC, lockfile, notification ----------------------
+  {
+    const addedFolders = [FAKE_WORKSPACE_URI, SECOND_WORKSPACE_URI, ADDED_WORKSPACE_URI];
+    const notification = rpc1.waitNotification('workspace_changed');
+    adapter.state.folders = addedFolders;
+    adapter.handlers.workspace(addedFolders);
+    const event = await notification;
+    check(
+      'workspace addition notification',
+      JSON.stringify(event.params) === JSON.stringify({ folders: addedFolders }),
+      JSON.stringify(event.params),
+    );
+    const res = await rpc1.call(14, 'getWorkspaceFolders');
+    check('getWorkspaceFolders after addition', JSON.stringify(res.result) === JSON.stringify({ folders: addedFolders }));
+    const updatedLock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+    check(
+      'lockfile updated after workspace addition',
+      JSON.stringify(updatedLock.workspaceFolders) === JSON.stringify([FAKE_WORKSPACE_PATH, SECOND_WORKSPACE_PATH, ADDED_WORKSPACE_PATH]),
+      JSON.stringify(updatedLock.workspaceFolders),
+    );
+  }
+  {
+    const remainingFolders = [FAKE_WORKSPACE_URI, ADDED_WORKSPACE_URI];
+    const notification = rpc1.waitNotification('workspace_changed');
+    adapter.state.folders = remainingFolders;
+    adapter.handlers.workspace(remainingFolders);
+    const event = await notification;
+    check(
+      'workspace removal notification',
+      JSON.stringify(event.params) === JSON.stringify({ folders: remainingFolders }),
+      JSON.stringify(event.params),
+    );
+    const res = await rpc1.call(15, 'getWorkspaceFolders');
+    check('getWorkspaceFolders after removal', JSON.stringify(res.result) === JSON.stringify({ folders: remainingFolders }));
+    const updatedLock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+    check(
+      'lockfile updated after workspace removal',
+      JSON.stringify(updatedLock.workspaceFolders) === JSON.stringify([FAKE_WORKSPACE_PATH, ADDED_WORKSPACE_PATH]),
+      JSON.stringify(updatedLock.workspaceFolders),
+    );
   }
 
   // --- second concurrent client -------------------------------------------

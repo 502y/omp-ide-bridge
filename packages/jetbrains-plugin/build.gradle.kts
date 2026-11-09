@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "community.omp.idebridge"
-version = "0.1.0"
+version = "0.1.1"
 
 repositories {
     mavenCentral()
@@ -22,6 +22,9 @@ dependencies {
 }
 
 intellijPlatform {
+    publishing {
+        token = providers.gradleProperty("intellijPlatformPublishingToken")
+    }
     pluginConfiguration {
         id = "community.omp.idebridge"
         name = "OMP IDE Bridge (Community)"

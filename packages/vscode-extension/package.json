@@ -2,7 +2,7 @@
   "name": "omp-ide-bridge",
   "displayName": "OMP IDE Bridge (Community)",
   "description": "Unofficial community bridge between VS Code-compatible editors and the Oh My Pi coding agent",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "502y",
   "author": "502y",
   "license": "MIT",

@@ -1,7 +1,7 @@
 <idea-plugin url="https://github.com/502y/omp-ide-bridge">
     <id>community.omp.idebridge</id>
     <name>OMP IDE Bridge (Community)</name>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
     <vendor url="https://github.com/502y">502y</vendor>
 
     <description><![CDATA[
@@ -21,11 +21,12 @@
     ]]></description>
 
     <change-notes><![CDATA[
-        <p>Initial community release.</p>
+        <p>Multi-repository workspace fixes.</p>
         <ul>
-            <li>Authenticated protocol v1 bridge with lockfile discovery.</li>
-            <li>Live editor context, diagnostics, file operations, and mention actions.</li>
-            <li>Compatibility verified against IntelliJ IDEA Community 2023.1.7 and 2024.3.1.</li>
+            <li>Discover OMP sessions from project base directories and attached module content roots.</li>
+            <li>Refresh workspace discovery when module roots change.</li>
+            <li>Route file operations to the project with the most specific matching root.</li>
+            <li>Update the OMP-side extension to 0.1.3 for workspace context and cross-platform URI fixes.</li>
         </ul>
     ]]></change-notes>
 
@@ -41,6 +42,11 @@
     <extensions defaultExtensionNs="com.intellij">
         <postStartupActivity implementation="com.omp.idebridge.IdeBridgeStartupActivity"/>
     </extensions>
+
+    <projectListeners>
+        <listener class="com.omp.idebridge.WorkspaceRootsListener"
+                  topic="com.intellij.openapi.roots.ModuleRootListener"/>
+    </projectListeners>
 
     <applicationListeners>
         <listener class="com.omp.idebridge.WorkspaceListener"

@@ -7,7 +7,8 @@
  * Owns:
  *  - WebSocketServer bound to 127.0.0.1, random port in [10000, 65535] (≤20 tries)
  *  - lockfile lifecycle: <lockDir>/<port>.lock (mode 0600, dir mode 0700),
- *    written after the server is listening, deleted on stop()
+ *    written after the server is listening and refreshed when workspace folders change,
+ *    deleted on stop()
  *  - auth: client must send HTTP header `x-omp-ide-authorization: <authToken>`;
  *    mismatch → close code 1008
  *  - JSON-RPC 2.0 framing/dispatch (requests with id → result/error,
@@ -370,15 +371,18 @@ export class IdeBridgeServer {
       a.onSelectionChanged((selection) => this.broadcast('selection_changed', { selection })),
       a.onEditorsChanged((editors) => this.broadcast('editors_changed', { editors })),
       a.onDiagnosticsChanged((uris) => this.broadcast('diagnostics_changed', { uris })),
-      a.onWorkspaceChanged((folders) => this.broadcast('workspace_changed', { folders })),
+      a.onWorkspaceChanged((folders) => {
+        if (this.portValue !== undefined) this.writeLockfile(folders);
+        this.broadcast('workspace_changed', { folders });
+      }),
     );
   }
 
-  private writeLockfile(): void {
+  private writeLockfile(folderUris?: string[]): void {
     const lockDir = this.opts.lockDir ?? path.join(os.homedir(), '.omp', 'ide');
     fs.mkdirSync(lockDir, { recursive: true, mode: 0o700 });
     fs.chmodSync(lockDir, 0o700);
-    const foldersResult = this.opts.adapter.getWorkspaceFolders();
+    const foldersResult = folderUris ? { folders: folderUris } : this.opts.adapter.getWorkspaceFolders();
     if (foldersResult instanceof Promise) {
       throw new Error('getWorkspaceFolders must be synchronous for lockfile writing');
     }

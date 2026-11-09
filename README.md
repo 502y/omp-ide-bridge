@@ -102,6 +102,9 @@ Wire contract: [docs/protocol.md](docs/protocol.md). Packages:
 
    ```
    <ide-context source="VS Code">
+   Workspace folders:
+   - /projects/repo-a
+   - /projects/repo-b
    Active file: src/foo.ts (selection lines 12-34)
    <selection language="ts">…</selection>
    Open tabs: a.ts, src/b.ts
@@ -119,6 +122,8 @@ Wire contract: [docs/protocol.md](docs/protocol.md). Packages:
 ## Usage in OMP
 
 - Just talk — the agent sees your active file/selection each turn.
+- Multi-repository workspaces: add folders to a VS Code workspace, or attach modules/content roots in JetBrains. OMP can discover the IDE from any listed root and includes all roots in its context, updating them when folders change. Files outside OMP's cwd use absolute paths; relative tool paths still resolve against its cwd.
+- One IDE connection is active at a time; use `/ide <n>` to switch between separate IDE servers. Update the OMP extension and the relevant IDE plugin to get dynamic multi-root discovery.
 - The status-bar file icon follows OMP's current symbol preset (Unicode, Nerd Font, or ASCII) and theme overrides on each IDE selection update.
 - The file status uses at most 80% of the terminal width and refreshes on resize. Long paths preserve the first directory and filename before intermediate directories; extremely narrow terminals shorten directory context, then the filename. Without terminal dimensions, an 80-column terminal is assumed.
 - `/ide` — connection status + discovered IDEs; `/ide 2` — connect to #2; `/ide off`.

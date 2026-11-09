@@ -13,6 +13,8 @@ import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManagerListener
+import com.intellij.openapi.roots.ModuleRootEvent
+import com.intellij.openapi.roots.ModuleRootListener
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.util.Alarm
@@ -135,5 +137,23 @@ class WorkspaceListener : ProjectManagerListener {
 
     override fun projectClosed(project: Project) {
         IdeBridgeServer.getInstance().onProjectClosed(project)
+    }
+}
+
+/**
+ * Project-level workspace tracking: content-root changes can add or remove folders
+ * without opening or closing the project. Registered declaratively in plugin.xml.
+ */
+class WorkspaceRootsListener(private val project: Project) : ModuleRootListener {
+
+    override fun rootsChanged(@Suppress("UNUSED_PARAMETER") event: ModuleRootEvent) {
+        if (project.isDisposed) return
+        // Root notifications may be delivered while the project model is updating;
+        // refresh after the callback so the read action sees the committed roots.
+        ApplicationManager.getApplication().invokeLater {
+            if (!project.isDisposed) {
+                IdeBridgeServer.getInstance().refreshWorkspace()
+            }
+        }
     }
 }

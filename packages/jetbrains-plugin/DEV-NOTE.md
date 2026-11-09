@@ -40,7 +40,7 @@ Target SDK is pinned in `gradle.properties` (`platformType=IC`, `platformVersion
 | `Protocol.kt` | Protocol v1 data types, Gson JSON-RPC parsing, and error codes |
 | `IdeBridgeServer.kt` | Application service: WebSocket server, auth, lockfile, dispatch, broadcasts |
 | `ProjectAdapter.kt` | Project service: selections, editors, files, diagnostics, URI conversion |
-| `Listeners.kt` | Startup activity, project changes, diagnostics notifications, cleanup |
+| `Listeners.kt` | Startup activity, project changes, module-root changes, diagnostics notifications, cleanup |
 | `MentionAction.kt` | Editor context-menu action that sends `at_mentioned` |
 
 Diagnostics use the semi-internal `DaemonCodeAnalyzerEx.processHighlights` API to
@@ -67,7 +67,7 @@ Services are **light services** (`@Service` annotation) and deliberately NOT dec
 
 - Lockfile `~/.omp/ide/<port>.lock` appears after the first project opens; POSIX
   mode `0600` with directory `0700`, or current-user profile ACL on Windows.
-- Workspace folders update on project open/close and `workspace_changed` broadcasts.
+- Adding/removing a module content root refreshes lockfile folders and emits `workspace_changed`.
 - Two simultaneous OMP clients connect and both receive notifications.
 - `initialize` advertises `openDiff:false`, `diagnostics:true`, `executeCode:false`;
   `openDiff` returns `-32601`.

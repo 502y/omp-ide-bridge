@@ -97,6 +97,9 @@ cd packages/jetbrains-plugin
 
    ```text
    <ide-context source="VS Code">
+   Workspace folders:
+   - /projects/repo-a
+   - /projects/repo-b
    Active file: src/foo.ts (selection lines 12-34)
    <selection language="ts">…</selection>
    Open tabs: a.ts, src/b.ts
@@ -114,6 +117,8 @@ cd packages/jetbrains-plugin
 ## 在 OMP 中使用
 
 - 直接对话：代理会在每轮自动看到当前文件和选区。
+- 多仓库工作区：在 VS Code 工作区添加文件夹，或在 JetBrains 中附加模块/content roots。从任一已登记根目录启动 OMP 均可发现 IDE；上下文包含所有根目录，并随目录增删更新。OMP 当前目录之外的文件使用绝对路径；工具的相对路径仍以 OMP 当前目录为基准。
+- 每次只连接一个 IDE 服务；独立 IDE 服务之间使用 `/ide <n>` 切换。动态多根目录发现需要同时更新 OMP 扩展和相应 IDE 插件。
 - 状态栏文件图标在每次 IDE 选区更新时跟随 OMP 当前的符号预设（Unicode、Nerd Font 或 ASCII）及主题自定义图标。
 - 文件状态项最多占终端宽度的 80%，窗口缩放时自动刷新。长路径优先保留第一级目录和文件名，省略中间目录；极窄窗口下先缩减目录信息，再缩短文件名。无法获取终端尺寸时按 80 列计算。
 - `/ide`：查看连接状态和发现的 IDE；`/ide 2`：连接第 2 个 IDE；`/ide off`：断开连接。

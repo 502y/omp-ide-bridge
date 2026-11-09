@@ -87,19 +87,15 @@ export function pathToUri(absolutePath: string): string {
 
 export function uriToPath(uri: string): string {
 	if (!uri.startsWith("file:")) return uri;
-	const decodedPath = fileURLToPath(uri);
-	// Bun's POSIX fileURLToPath returns `//...` for RFC 3986 URIs with an empty
-	// authority (file:///tmp/a). Collapse the implementation artifact back to
-	// one slash; a real UNC URI (file://server/share) has a non-empty authority
-	// and never reaches this branch.
-	if (decodedPath.startsWith("//")) return decodedPath.slice(1);
-	// Bun's POSIX fileURLToPath also treats `file:///Z:/...` as POSIX and
-	// leaves `/Z:/...`. Windows drive URIs produced by an IDE must decode to
-	// a native Windows path even when the OMP runtime is POSIX.
-	if (process.platform !== "win32" && /^\/[A-Za-z]:\//.test(decodedPath)) {
-		return decodedPath.slice(1);
-	}
-	return decodedPath;
+	const url = new URL(uri);
+	// IDE paths need not share the OMP host's OS (e.g. a POSIX file URI
+	// received on Windows). Select the decoder from the URI, not the host.
+	// VS Code can percent-encode the colon in Windows drive letters.
+	const windows = url.hostname !== "" || /^\/[A-Za-z](?::|%3a)\//i.test(url.pathname);
+	const decodedPath = fileURLToPath(url, { windows });
+	return windows && process.platform !== "win32"
+		? decodedPath.replaceAll("\\", "/")
+		: decodedPath;
 }
 
 /** True when `child` is `parent` itself or lives under it (segment boundary). */

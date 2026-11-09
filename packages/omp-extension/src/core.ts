@@ -55,6 +55,7 @@ export class OmpIdeBridge {
 	private reconnectAttempt = 0;
 	private stopped = true;
 
+	private folders: string[] = [];
 	private editors: Editor[] = [];
 	private currentSelection: Selection | null = null;
 	private latestSelection: Selection | null = null;
@@ -125,6 +126,7 @@ export class OmpIdeBridge {
 		const text = buildIdeContext(
 			{
 				ideName: this.ideName ?? "IDE",
+				folders: this.folders,
 				editors: this.editors,
 				selection: this.effectiveSelection(),
 				diagnostics: [...this.diagnostics.values()].flat(),
@@ -270,6 +272,7 @@ async getDiagnostics(path?: string): Promise<unknown> {
 
 	private async open(candidate: IdeCandidate): Promise<boolean> {
 		this.client?.close();
+		this.folders = candidate.lock.workspaceFolders.map(pathToUri);
 		const client = new BridgeClient(candidate.port, candidate.lock.authToken, {
 			onSelectionChanged: (sel) => {
 				this.currentSelection = sel;
@@ -286,8 +289,8 @@ async getDiagnostics(path?: string): Promise<unknown> {
 			onDiagnosticsChanged: () => {
 				this.scheduleDiagnosticsPull();
 			},
-			onWorkspaceChanged: () => {
-				/* informational only; workspace comes from lockfile for discovery */
+			onWorkspaceChanged: (folders) => {
+				this.folders = folders;
 			},
 			onAtMentioned: (m) => this.events.onAtMentioned(m),
 			onClose: () => {
@@ -322,6 +325,12 @@ async getDiagnostics(path?: string): Promise<unknown> {
 				return null;
 			}
 		};
+		// A notification arriving during the pull is newer than its response.
+		const initialFolders = this.folders;
+		const folders = await safe(() => client.call("getWorkspaceFolders"));
+		if (folders !== null && this.folders === initialFolders) {
+			this.folders = readField(folders, "folders", stringList);
+		}
 		const editors = await safe(() => client.call("getOpenEditors"));
 		if (editors !== null) {
 			this.editors = readField(editors, "editors", editorList);
