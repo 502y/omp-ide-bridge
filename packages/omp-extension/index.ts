@@ -12,9 +12,27 @@ import { scanCandidates } from "./src/lockfile";
 import type { AtMention, Selection } from "./src/protocol";
 
 interface UiHandle {
-	readonly theme: { symbol(key: "icon.file"): string };
+	readonly theme: {
+		symbol?(key: "icon.file"): string;
+		symbols?: { symbol?(key: "icon.file"): string };
+		icon?: { file?: string };
+	};
 	notify(text: string, level?: string): void;
 	setStatus(key: string, text: string): void;
+}
+
+function fileIcon(handle: UiHandle | null): string {
+	const t = handle?.theme as
+		| { symbol?: (key: string) => string; symbols?: { symbol?: (key: string) => string }; icon?: { file?: string } }
+		| undefined;
+	try {
+		if (typeof t?.symbol === "function") return t.symbol("icon.file") ?? "";
+		if (typeof t?.symbols?.symbol === "function") return t.symbols.symbol("icon.file") ?? "";
+		if (typeof t?.icon?.file === "string") return t.icon.file;
+	} catch {
+		// Theme lookup must never take down the session; fall through to empty.
+	}
+	return "";
 }
 
 function text(text: string, details: Record<string, unknown> = {}, isError = false) {
@@ -28,9 +46,13 @@ export default function ideBridge(pi: ExtensionAPI) {
 	let cwd = "";
 	let selection: Selection | null = null;
 	const refreshStatus = () => {
-		ui?.setStatus("ide", selection === null ? "" : formatSelectionStatus(
-			selection, cwd, ui.theme.symbol("icon.file"), process.stdout.columns ?? 80,
-		));
+		try {
+			ui?.setStatus("ide", selection === null ? "" : formatSelectionStatus(
+				selection, cwd, fileIcon(ui), process.stdout.columns ?? 80,
+			));
+		} catch {
+			try { ui?.setStatus("ide", ""); } catch { /* never throw from status */ }
+		}
 	};
 
 	const bridge = new OmpIdeBridge({
