@@ -7,7 +7,11 @@
  */
 declare module "@oh-my-pi/pi-coding-agent" {
 	export interface ExtensionUIContextLike {
-		readonly theme: { symbol(key: "icon.file"): string };
+		readonly theme: {
+			symbol?(key: "icon.file"): string;
+			symbols?: { symbol?(key: "icon.file"): string };
+			icon?: { file?: string };
+		};
 		notify(text: string, level?: string): void;
 		setStatus(key: string, text: string): void;
 	}
